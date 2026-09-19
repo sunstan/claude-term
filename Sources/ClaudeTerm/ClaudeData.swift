@@ -22,10 +22,12 @@ struct TranscriptUpdate {
     var finishedTools: [String] = []
     /// absolute path → (backup file name, version) from file-history-snapshot records
     var backups: [String: (name: String, version: Int)] = [:]
+    /// absolute path → unified-diff hunks of edits made through Bash commands (toolUseResult.bashEditDiff)
+    var bashDiffs: [String: [String]] = [:]
     var isEmpty: Bool {
         events.isEmpty && inputTokens == 0 && outputTokens == 0 && planPath == nil
             && planMode == nil && aiTitle == nil && permissionMode == nil
-            && startedTools.isEmpty && finishedTools.isEmpty && backups.isEmpty
+            && startedTools.isEmpty && finishedTools.isEmpty && backups.isEmpty && bashDiffs.isEmpty
     }
 }
 
@@ -321,6 +323,19 @@ enum ClaudeData {
                 }
             case "user":
                 guard let msg = obj["message"] as? [String: Any] else { continue }
+                if let tur = obj["toolUseResult"] as? [String: Any], let bed = tur["bashEditDiff"] as? [String: Any],
+                   let files = bed["files"] as? [[String: Any]] {
+                    for f in files {
+                        guard let path = f["filePath"] as? String else { continue }
+                        var text = ""
+                        for h in f["hunks"] as? [[String: Any]] ?? [] {
+                            text += "@@ -\(h["oldStart"] ?? 0),\(h["oldLines"] ?? 0) +\(h["newStart"] ?? 0),\(h["newLines"] ?? 0) @@\n"
+                            text += (h["lines"] as? [String] ?? []).joined(separator: "\n") + "\n"
+                        }
+                        u.bashDiffs[path, default: []].append(text)
+                        u.events.append(ToolEvent(time: time, kind: "Edit (bash)", detail: path, file: path))
+                    }
+                }
                 if let arr = msg["content"] as? [[String: Any]] {
                     for item in arr where item["type"] as? String == "tool_result" {
                         if let tid = item["tool_use_id"] as? String { u.finishedTools.append(tid) }

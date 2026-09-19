@@ -126,3 +126,24 @@ struct FileHistoryTests {
         return String(decoding: d, as: UTF8.self)
     }
 }
+
+struct BashEditDiffTests {
+    @Test func testBashEditDiffIsParsed() {
+        let tmp = TempDir()
+        let path = tmp.write("s.jsonl", jsonl([
+            ["type": "user", "message": ["role": "user", "content": [["type": "tool_result", "tool_use_id": "t1", "content": "ok"]]],
+             "toolUseResult": ["stdout": "x", "bashEditDiff": ["files": [[
+                "filePath": "/p/README.md",
+                "hunks": [["oldStart": 187, "oldLines": 4, "newStart": 187, "newLines": 4, "lines": [" a", "-Test diff", "+Test diff 2"]]]
+             ]], "changedFiles": ["/p/README.md"]]]],
+        ]))
+        var offset: UInt64 = 0
+        let u = ClaudeData.readEvents(path: path, offset: &offset)
+        #expect(u.bashDiffs["/p/README.md"]?.count == 1)
+        let d = u.bashDiffs["/p/README.md"]![0]
+        #expect(d.hasPrefix("@@ -187,4 +187,4 @@\n"))
+        #expect(ClaudeData.diffStats(d) == (1, 1))
+        #expect(u.events.map(\.kind) == ["Edit (bash)"])
+        #expect(u.events[0].file == "/p/README.md")
+    }
+}

@@ -38,6 +38,8 @@ final class TerminalSession: NSObject, ObservableObject, Identifiable, LocalProc
     @Published var files: [String: Int] = [:]
     /// absolute path → earliest backup file name for this session (Claude Code file-history)
     @Published var backups: [String: (name: String, version: Int)] = [:]
+    /// absolute path → diffs of edits made by Bash commands in this session
+    @Published var bashDiffs: [String: [String]] = [:]
     var sessionId: String? { transcriptPath.map { (($0 as NSString).lastPathComponent as NSString).deletingPathExtension } }
     @Published var inputTokens = 0
     @Published var outputTokens = 0
@@ -160,7 +162,7 @@ final class TerminalSession: NSObject, ObservableObject, Identifiable, LocalProc
                 claudeRunning = true
                 claudeStartedAt = Date()
                 transcriptPath = nil; offset = 0
-                events = []; files = [:]; backups = [:]; runningTools = []
+                events = []; files = [:]; backups = [:]; bashDiffs = [:]; runningTools = []
                 inputTokens = 0; outputTokens = 0
                 planPath = nil; planText = ""; planMode = false; permissionMode = nil
                 claudeReusesTranscript = lastCommand.contains("--continue") || lastCommand.contains("--resume") || lastCommand.contains(" -c") || lastCommand.contains(" -r")
@@ -215,6 +217,7 @@ final class TerminalSession: NSObject, ObservableObject, Identifiable, LocalProc
                 for e in u.events where e.file != nil && !e.file!.hasPrefix(ClaudeData.plansDir) {
                     files[e.file!, default: 0] += 1
                 }
+                for (path, d) in u.bashDiffs { bashDiffs[path, default: []] += d }
                 for (path, b) in u.backups {
                     if let e = backups[path], e.version <= b.version { continue }
                     backups[path] = b

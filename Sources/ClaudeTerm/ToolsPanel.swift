@@ -535,7 +535,7 @@ struct ActivityTab: View {
         case "user": return "👤"
         case "text": return "💬"
         case "Bash": return "⌘"
-        case "Edit", "Write", "MultiEdit", "NotebookEdit": return "✏️"
+        case "Edit", "Write", "MultiEdit", "NotebookEdit", "Edit (bash)": return "✏️"
         case "Read": return "📄"
         case "Grep", "Glob": return "🔍"
         case "Agent", "Task": return "🤖"
@@ -551,16 +551,17 @@ struct FilesTab: View {
     @State private var diff: String = ""
     @State private var stats: [String: (Int, Int)] = [:]
 
+    private func isModified(_ p: String) -> Bool { session.backups[p] != nil || session.bashDiffs[p] != nil }
     private var rows: [String] {
         session.files.keys.sorted { a, b in
-            let ea = session.backups[a] != nil, eb = session.backups[b] != nil
+            let ea = isModified(a), eb = isModified(b)
             return ea != eb ? ea : a < b       // modified files first
         }
     }
     /// Derived, never assigned during rendering (split views lay out from AppKit).
     private var current: String? {
         if let s = selected, session.files[s] != nil { return s }
-        return rows.first { session.backups[$0] != nil } ?? rows.first
+        return rows.first { isModified($0) } ?? rows.first
     }
 
     var body: some View {
@@ -570,8 +571,8 @@ struct FilesTab: View {
             HSplitView {
                 List(rows, id: \.self, selection: Binding(get: { current }, set: { selected = $0 })) { path in
                     HStack(spacing: 6) {
-                        Image(systemName: session.backups[path] != nil ? "pencil" : (isNew(path) ? "plus.circle" : "eye"))
-                            .font(.system(size: 10)).foregroundStyle(session.backups[path] != nil ? Color.orange : (isNew(path) ? .green : .secondary))
+                        Image(systemName: isModified(path) ? "pencil" : (isNew(path) ? "plus.circle" : "eye"))
+                            .font(.system(size: 10)).foregroundStyle(isModified(path) ? Color.orange : (isNew(path) ? .green : .secondary))
                             .frame(width: 12)
                         VStack(alignment: .leading, spacing: 1) {
                             Text((path as NSString).lastPathComponent).font(.system(size: 12)).lineLimit(1)
@@ -589,7 +590,7 @@ struct FilesTab: View {
                         Button("Ouvrir") { NSWorkspace.shared.open(URL(fileURLWithPath: path)) }
                         Button("Afficher dans le Finder") { NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: path)]) }
                         Button("Copier le chemin") { NSPasteboard.general.clearContents(); NSPasteboard.general.setString(path, forType: .string) }
-                        if session.backups[path] != nil || isNew(path) {
+                        if isModified(path) || isNew(path) {
                             Button("Copier le diff") { NSPasteboard.general.clearContents(); NSPasteboard.general.setString(diffFor(path), forType: .string) }
                         }
                     }
@@ -604,6 +605,7 @@ struct FilesTab: View {
             .onChange(of: current) { _, _ in refresh() }
             .onChange(of: session.events.count) { _, _ in refresh() }
             .onChange(of: session.backups.count) { _, _ in refresh() }
+            .onChange(of: session.bashDiffs.count) { _, _ in refresh() }
         }
     }
 
@@ -615,15 +617,20 @@ struct FilesTab: View {
 
     private func diffFor(_ path: String) -> String {
         guard let sid = session.sessionId else { return "" }
-        if session.backups[path] == nil && !isNew(path) { return "" }
-        return ClaudeData.sessionDiff(path: path, backupName: session.backups[path]?.name, sessionId: sid)
+        if session.backups[path] != nil || isNew(path) {
+            return ClaudeData.sessionDiff(path: path, backupName: session.backups[path]?.name, sessionId: sid)
+        }
+        if let hunks = session.bashDiffs[path] {
+            return "--- avant\n+++ après\n" + hunks.joined(separator: "\n")
+        }
+        return ""
     }
 
     private func refresh() {
         let paths = rows, sel = current
         DispatchQueue.global(qos: .userInitiated).async {
             var st: [String: (Int, Int)] = [:]
-            for p in paths where session.backups[p] != nil || isNew(p) {
+            for p in paths where isModified(p) || isNew(p) {
                 st[p] = ClaudeData.diffStats(diffFor(p))
             }
             let d = sel.map(diffFor) ?? ""
