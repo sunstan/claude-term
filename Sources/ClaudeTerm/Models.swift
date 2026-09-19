@@ -84,6 +84,9 @@ final class TerminalSession: NSObject, ObservableObject, Identifiable, LocalProc
         Theme.apply(to: view)
 
         var env = ProcessInfo.processInfo.environment
+        // Never inherit markers from a Claude Code session that may have launched ClaudeTerm:
+        // with CLAUDE_CODE_CHILD_SESSION set, claude disables transcript saving.
+        for k in env.keys where k.hasPrefix("CLAUDE") { env.removeValue(forKey: k) }
         env["TERM"] = "xterm-256color"
         env["COLORTERM"] = "truecolor"
         env["TERM_PROGRAM"] = "ClaudeTerm"
