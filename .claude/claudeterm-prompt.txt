@@ -1,0 +1,3 @@
+Ce projet (claude-term, /Users/jerome/Documents/development/claude-term) fait partie d'un ensemble de projets liés, déjà accessibles sans demander :
+- legacy : /Users/jerome/Documents/development/games/legacy
+Va lire ces dossiers directement quand une tâche touche à leurs interfaces (API, composants, types) au lieu de demander où ils sont.
