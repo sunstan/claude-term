@@ -187,4 +187,3 @@ PolyForm Noncommercial 1.0.0. Utilisation, modification et partage libres pour u
 Voir [LICENSE.md](LICENSE.md).
 
 Required Notice: Copyright Jérôme Laval.
-Test diff 2
