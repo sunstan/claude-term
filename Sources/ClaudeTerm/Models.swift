@@ -555,7 +555,7 @@ final class AppState: ObservableObject {
         clearAttention(s)
     }
     func chooseFolder(for project: Project? = nil) {
-        let panel = NSOpenPanel()
+        let panel = NSOpenPanel(); panel.showsHiddenFiles = true
         panel.canChooseDirectories = true
         panel.canChooseFiles = false
         panel.prompt = L("Ouvrir le projet")

@@ -25,7 +25,7 @@ struct FolderNode: Identifiable, Hashable {
 final class DirectoryCache {
     static let shared = DirectoryCache()
     private var entries: [String: (mtime: Date, checked: Date, nodes: [FolderNode])] = [:]
-    private let skip: Set<String> = ["node_modules", "Library", ".git", "build", "DerivedData", ".build"]
+    private let skip: Set<String> = ["node_modules", "Library", "DerivedData"]
 
     func children(of path: String) -> [FolderNode]? {
         let now = Date()
@@ -38,7 +38,7 @@ final class DirectoryCache {
         }
         guard let names = try? fm.contentsOfDirectory(atPath: path) else { return nil }
         var dirs: [FolderNode] = [], files: [FolderNode] = []
-        for n in names where !n.hasPrefix(".") && !skip.contains(n) {
+        for n in names where !skip.contains(n) && n != ".DS_Store" {
             var d: ObjCBool = false
             guard fm.fileExists(atPath: path + "/" + n, isDirectory: &d) else { continue }
             if d.boolValue { dirs.append(FolderNode(path: path + "/" + n, isDir: true)) }
@@ -184,7 +184,7 @@ struct FileBrowserView: View {
                         }
                         Divider()
                         Button("Choisir un dossier…") {
-                            let panel = NSOpenPanel(); panel.canChooseDirectories = true; panel.canChooseFiles = false
+                            let panel = NSOpenPanel(); panel.showsHiddenFiles = true; panel.canChooseDirectories = true; panel.canChooseFiles = false
                             if panel.runModal() == .OK, let u = panel.url { project.addLink(u.path); project.saveLinks() }
                         }
                     } label: {

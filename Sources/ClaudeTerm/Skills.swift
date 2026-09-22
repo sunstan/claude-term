@@ -258,7 +258,7 @@ struct NewSkillMenu: View {
     }
 
     private func pick() {
-        let panel = NSOpenPanel()
+        let panel = NSOpenPanel(); panel.showsHiddenFiles = true
         panel.canChooseFiles = true
         panel.canChooseDirectories = true
         panel.allowsMultipleSelection = true
