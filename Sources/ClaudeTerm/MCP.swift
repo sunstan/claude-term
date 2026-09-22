@@ -135,8 +135,11 @@ enum MCPStore {
         DispatchQueue.global(qos: .userInitiated).async {
             let p = Process()
             p.executableURL = URL(fileURLWithPath: "/bin/zsh")
-            let cmd = (["claude", "mcp"] + args).map(shellQuote).joined(separator: " ")
+            let cmd = ([ClaudeCLI.path() ?? "claude", "mcp"] + args).map(shellQuote).joined(separator: " ")
             p.arguments = ["-l", "-c", cmd]
+            var env = ProcessInfo.processInfo.environment
+            env["PATH"] = ClaudeCLI.augmentedPATH(env["PATH"])
+            p.environment = env
             if let c = cwd { p.currentDirectoryURL = URL(fileURLWithPath: c) }
             let out = Pipe(); p.standardOutput = out; p.standardError = out
             do { try p.run() } catch { DispatchQueue.main.async { completion(-1, error.localizedDescription) }; return }

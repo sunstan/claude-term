@@ -89,6 +89,7 @@ final class TerminalSession: NSObject, ObservableObject, Identifiable, LocalProc
         // Never inherit markers from a Claude Code session that may have launched ClaudeTerm:
         // with CLAUDE_CODE_CHILD_SESSION set, claude disables transcript saving.
         for k in env.keys where k.hasPrefix("CLAUDE") { env.removeValue(forKey: k) }
+        env["PATH"] = ClaudeCLI.augmentedPATH(env["PATH"])
         env["TERM"] = "xterm-256color"
         env["COLORTERM"] = "truecolor"
         env["TERM_PROGRAM"] = "ClaudeTerm"
@@ -106,7 +107,9 @@ final class TerminalSession: NSObject, ObservableObject, Identifiable, LocalProc
             if let r = projectRoot, let prompt = try? String(contentsOfFile: LinkStore.promptPath(root: r), encoding: .utf8), !prompt.isEmpty {
                 extra = " --append-system-prompt-file \(shellQuote(LinkStore.promptPath(root: r)))"
             }
-            let cmd = "exec claude" + (resume.map { " --resume \($0)" } ?? "") + extra
+            let bin = ClaudeCLI.path().map(shellQuote) ?? "claude"
+            let cmd = "exec \(bin)" + (resume.map { " --resume \($0)" } ?? "") + extra
+                + " || { echo; echo 'ClaudeTerm : commande claude introuvable. Installez Claude Code (https://claude.com/claude-code) ou ajoutez-la au PATH dans ~/.zprofile.'; exec zsh -l; }"
             view.startProcess(executable: "/bin/zsh", args: ["-l", "-c", cmd], environment: envArray, execName: "zsh", currentDirectory: cwd)
         case .shell, .script:
             // always zsh: the shell integration (ZDOTDIR hooks) depends on it
