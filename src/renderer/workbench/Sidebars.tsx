@@ -59,7 +59,7 @@ export function LeftSidebar({ project }: { project: Project }) {
       {activity === 'memo' && project.root && <MemoIsland project={project} />}
       {activity.includes(':') && <PluginViews activity={activity} />}
     </div>
-    <Gutter axis="x" className="left" onDrag={(d) => setWidth((w) => Math.max(180, Math.min(600, w + d)))} />
+    <Gutter axis="x" className="left" size={width} onSize={setWidth} min={180} max={600} reset={260} />
     </>
   )
 }
@@ -71,7 +71,7 @@ export function RightSidebar() {
   if (!activity) return null
   return (
     <>
-    <Gutter axis="x" className="right" onDrag={(d) => setWidth((w) => Math.max(220, Math.min(700, w - d)))} />
+    <Gutter axis="x" className="right" size={width} onSize={setWidth} sign={-1} min={220} max={700} reset={320} />
     <div className="sidebar right" style={{ width }}>
       {activity === 'claude' && <ClaudeIsland />}
       {activity === 'process' && <ProcessIsland />}

@@ -242,7 +242,7 @@ function FilesView({ tab }: { tab: Tab }) {
           </div>
         ))}
       </div>
-      <Gutter axis="x" className="inner" onDrag={(d) => setListWidth((w) => Math.max(160, Math.min(700, w + d)))} />
+      <Gutter axis="x" className="inner" size={listWidth} onSize={setListWidth} min={160} max={700} reset={280} />
       <div className="diff">
         {current && isModified(current) ? (diff ? diff.split('\n').map((l, i) => <div key={i} className={'dl ' + (l.startsWith('+') && !l.startsWith('+++') ? 'add' : l.startsWith('-') && !l.startsWith('---') ? 'del' : l.startsWith('@@') ? 'hunk' : '')}>{l}</div>) : <Empty>{t('Aucune différence')}</Empty>) : <Empty>{t('Lu, pas modifié dans cette session')}</Empty>}
       </div>

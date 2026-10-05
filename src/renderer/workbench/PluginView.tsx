@@ -114,7 +114,7 @@ function Split({ list, detail, layoutKey }: { list: ReactNode; detail: ReactNode
   return (
     <div className="pv-split" ref={ref}>
       <div className="pv-split-main" style={{ width: `${pct}%` }}>{list}</div>
-      <Gutter axis="x" className="inner" onDrag={(d) => setPct((p) => Math.max(20, Math.min(90, p + (d / (ref.current?.clientWidth || 1000)) * 100)))} />
+      <Gutter axis="x" className="inner" size={pct} onSize={setPct} min={20} max={90} reset={75} scale={() => 100 / (ref.current?.clientWidth || 1000)} />
       <div className="pv-detail">{detail}</div>
     </div>
   )
@@ -128,7 +128,7 @@ function Stack({ panes, send, layoutKey }: { panes: ViewModel[]; send: Send; lay
     <div className="pv-stack" ref={ref}>
       {panes.map((p, i) => (
         <div key={i} className="pv-stack-pane" style={i === 0 && panes.length > 1 ? { height: `${first}%`, flex: 'none' } : undefined}>
-          {i > 0 && <Gutter axis="y" className="inner" onDrag={(d) => setFirst((f) => Math.max(10, Math.min(90, f + (d / (ref.current?.clientHeight || 600)) * 100)))} />}
+          {i > 0 && <Gutter axis="y" className="inner" size={first} onSize={setFirst} min={10} max={90} reset={50} scale={() => 100 / (ref.current?.clientHeight || 600)} />}
           <PluginViewBody model={p} send={send} layoutKey={`${layoutKey}:${i}`} />
         </div>
       ))}

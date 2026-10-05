@@ -230,6 +230,7 @@ const EN: Record<string, string> = {
   'limite atteinte': 'limit reached',
   'Commandes': 'Commands',
   'Claude travaille': 'Claude is working',
+  'Glisser pour redimensionner ; double-clic : taille par défaut': 'Drag to resize; double-click: default size',
   'Session': 'Session',
   'sous-agent': 'sub-agent',
   'Lecture du sous-agent…': 'Reading the sub-agent…',

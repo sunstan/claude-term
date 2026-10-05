@@ -102,7 +102,7 @@ export function Center({ project }: { project: Project }) {
               <div className="term-wrap editor-bg md-host">
                 <div className={'md-panes mode-' + (current.mdMode ?? 'code')}>
                   {(current.mdMode ?? 'code') !== 'preview' && <div className="md-pane" style={{ flex: current.mdMode === 'split' ? `0 0 ${splitWidth}%` : '1' }}><EditorHost tab={current} /></div>}
-                  {current.mdMode === 'split' && <Gutter axis="x" className="inner" onDrag={(d) => setSplitWidth((w) => Math.max(20, Math.min(80, w + (d / (document.querySelector('.md-panes')?.clientWidth || 1000)) * 100)))} />}
+                  {current.mdMode === 'split' && <Gutter axis="x" className="inner" size={splitWidth} onSize={setSplitWidth} min={20} max={80} reset={50} scale={() => 100 / (document.querySelector('.md-panes')?.clientWidth || 1000)} />}
                   {(current.mdMode ?? 'code') !== 'code' && <div className="md-pane"><MarkdownPreview path={current.path!} /></div>}
                 </div>
                 <div className="md-modes">

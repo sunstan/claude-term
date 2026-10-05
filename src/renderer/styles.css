@@ -52,11 +52,20 @@ input:focus { border-color: var(--ct-accent); }
 
 /* gutters and stacks */
 /* gutters overlay the existing gaps (center padding, stack gap): they take no extra space */
-.gutter { flex: none; z-index: 2; }
+.gutter { flex: none; z-index: 2; position: relative; touch-action: none; }
 .gutter.x { width: var(--ct-gutter); cursor: col-resize; }
 .gutter.y { height: var(--ct-gutter); cursor: row-resize; }
 .gutter.inert { pointer-events: none; }
-.gutter:hover { background: color-mix(in srgb, var(--ct-accent) 35%, transparent); }
+/* a thin line, inset from the ends, seen on hover and while dragging */
+.gutter::after { content: ""; position: absolute; border-radius: 1px; background: transparent; transition: background .12s; pointer-events: none; }
+.gutter.x::after { top: 10px; bottom: 10px; left: calc(50% - 1px); width: 2px; }
+.gutter.y::after { left: 10px; right: 10px; top: calc(50% - 1px); height: 2px; }
+.gutter:hover::after { background: color-mix(in srgb, var(--ct-accent) 50%, transparent); }
+.gutter.dragging::after { background: var(--ct-accent); }
+/* over the whole window while dragging: an editor or a frame under the pointer cannot take the moves */
+.drag-veil { position: fixed; inset: 0; z-index: 1000; }
+.drag-veil.x { cursor: col-resize; }
+.drag-veil.y { cursor: row-resize; }
 .vstack { display: flex; flex-direction: column; flex: 1; min-height: 0; }
 .vstack-top { flex: 1; min-height: 0; display: flex; flex-direction: column; }
 .vstack-top > .island { flex: 1; }
