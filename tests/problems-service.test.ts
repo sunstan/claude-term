@@ -13,7 +13,7 @@ describe('problems service', () => {
     t.write('tsconfig.json', JSON.stringify({ files: [], references: [{ path: './tsconfig.app.json' }] }))   // solution file: skipped
     t.write('tsconfig.app.json', JSON.stringify({ compilerOptions: { strict: true, noEmit: true }, include: ['src'] }))
     t.write('src/a.ts', 'const n: number = "x"\nexport {}\n')
-    symlinkSync(join(__dirname, '..', 'node_modules'), join(t.path, 'node_modules'))
+    symlinkSync(join(__dirname, '..', 'node_modules'), join(t.path, 'node_modules'), 'junction')
     const s = new ProblemsService(fsApi, () => process.env)
     const r = await s.check(t.path)
     expect(r.tools).toEqual([{ tool: 'tsc', dir: t.path, config: 'tsconfig.app.json', ok: true }])

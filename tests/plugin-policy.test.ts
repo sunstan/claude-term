@@ -35,7 +35,7 @@ describe('plugin policy', () => {
     const t = new TempDir()
     const proj = join(t.path, 'proj'), secret = join(t.path, 'secret')
     mkdirSync(proj); mkdirSync(secret); t.write('secret/key', 'k'); t.write('proj/ok.txt', 'x')
-    symlinkSync(secret, join(proj, 'link'))
+    symlinkSync(secret, join(proj, 'link'), 'junction')   // a junction: Windows needs no privilege for it, others ignore the type
     const c = ctx({ projectRoot: proj, pluginDir: join(t.path, 'plug'), home: '/nowhere', real: realpathSync })
     expect(fsError(join(proj, 'ok.txt'), c)).toBeNull()
     expect(fsError(join(proj, 'link', 'key'), c)).toMatch(/fs:home/)

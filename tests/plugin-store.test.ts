@@ -75,7 +75,8 @@ describe('tar reader', () => {
     const t = new TempDir()
     t.write('p/plugin.json', manifest()); t.write('p/main.js', '//'); t.write('p/' + 'n'.repeat(120) + '.txt', 'long')
     const out = join(t.path, 'p.tgz')
-    execFileSync('tar', ['-czf', out, '-C', t.path, 'p'], { env: { ...process.env, COPYFILE_DISABLE: '1' } })
+    // relative paths: GNU tar (Git for Windows) reads "C:" in a path as a remote host
+    execFileSync('tar', ['-czf', 'p.tgz', 'p'], { cwd: t.path, env: { ...process.env, COPYFILE_DISABLE: '1' } })
     const files = stripTopFolder(readTarGz(readFileSync(out), LIMITS))
     expect(files.map((f) => f.path).sort()).toEqual(['main.js', 'n'.repeat(120) + '.txt', 'plugin.json'])
     t.dispose()
