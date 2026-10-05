@@ -3,7 +3,7 @@ import { readFileSync, existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { TempDir } from './helpers'
 import { ProjectLinks, migrateFromProject } from '../src/main/services/links'
-import { Skills } from '../src/main/services/skills'
+import { Skills, skillName } from '../src/main/services/skills'
 import { Mcp } from '../src/main/services/mcp'
 import { FileIndex, score } from '../src/main/services/search'
 import { frontmatter, isValidSkillName } from '../src/shared/frontmatter'
@@ -90,6 +90,43 @@ describe('skills', () => {
     expect(existsSync(created)).toBe(false)
     expect(isValidSkillName('a-b1')).toBe(true); expect(isValidSkillName('A b')).toBe(false)
     expect(frontmatter("---\nk: 'v'\n---\n")).toEqual({ k: 'v' })
+    t.dispose()
+  })
+
+  it('copies skills and commands between a project and the personal ones, imports a file or a folder', () => {
+    const t = new TempDir()
+    const sk = new Skills(t.path)
+    const proj = join(t.path, 'proj')
+    t.write('proj/.claude/skills/deploy/SKILL.md', '---\nname: deploy\ndescription: Déploie\n---\n# deploy\n')
+    t.write('proj/.claude/skills/deploy/script.sh', 'echo\n')
+    t.write('proj/.claude/commands/review.md', 'Relis le diff.\n')
+    const [deploy, review] = sk.project(proj)
+    const copied = sk.copy(deploy, null)
+    expect(copied).toBe(join(t.path, '.claude', 'skills', 'deploy', 'SKILL.md'))
+    expect(readFileSync(join(t.path, '.claude', 'skills', 'deploy', 'script.sh'), 'utf8')).toBe('echo\n')   // the whole folder
+    expect(() => sk.copy(deploy, null)).toThrow(/existe déjà/)
+    expect(() => sk.copy(deploy, proj)).toThrow(/déjà là/)
+    expect(sk.copy(review, null)).toBe(join(t.path, '.claude', 'commands', 'review.md'))
+    expect(sk.personal().map((s) => s.name)).toEqual(['deploy', 'review'])
+
+    // a folder with its SKILL.md, a plain Markdown file (front matter added), a SKILL.md (its folder's name)
+    t.write('dl/lint-all/SKILL.md', '---\nname: lint-all\ndescription: Lint\n---\n')
+    expect(sk.importFrom(join(t.path, 'dl', 'lint-all'), proj)).toBe(join(proj, '.claude', 'skills', 'lint-all', 'SKILL.md'))
+    t.write('dl/Notes de Release.md', '# Titre\nRédige les notes de version.\n')
+    const imported = sk.importFrom(join(t.path, 'dl', 'Notes de Release.md'), proj)
+    expect(imported).toBe(join(proj, '.claude', 'skills', 'notes-de-release', 'SKILL.md'))
+    expect(readFileSync(imported, 'utf8')).toBe('---\nname: notes-de-release\ndescription: Rédige les notes de version.\n---\n# Titre\nRédige les notes de version.\n')
+    t.write('dl/x/SKILL.md', '---\nname: Été 2026\n---\nbody\n')
+    expect(sk.importFrom(join(t.path, 'dl', 'x', 'SKILL.md'), null)).toBe(join(t.path, '.claude', 'skills', 'ete-2026', 'SKILL.md'))
+    expect(() => sk.importFrom(join(t.path, 'dl', 'lint-all'), proj)).toThrow(/existe déjà/)
+    t.write('dl/empty/readme.txt', '')
+    expect(() => sk.importFrom(join(t.path, 'dl', 'empty'), proj)).toThrow(/SKILL\.md/)
+    expect(() => sk.importFrom(join(t.path, 'dl', 'empty', 'readme.txt'), proj)).toThrow(/\.md/)
+
+    expect(sk.knows(deploy.path, [proj])).toBe(true)
+    expect(sk.knows(join(t.path, 'dl', 'x', 'SKILL.md'), [proj])).toBe(false)
+    expect(sk.knows(join(proj, '.claude', 'skills', '..', '..', 'secret.md'), [proj])).toBe(false)
+    expect(skillName('  Mon Skill_v2 ! ')).toBe('mon-skill-v2')
     t.dispose()
   })
 })

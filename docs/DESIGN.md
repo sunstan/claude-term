@@ -198,7 +198,8 @@ and **Linear** (API key in secrets, GraphQL, "Mes issues", "Démarrer avec Claud
   (their files carry Windows paths).
 - Writes are limited to: `~/.claude/settings.json` (form; hooks; our `statusLine` on demand, never over a foreign
   one), `sessions-index.json`,
-  `<project>/.mcp.json` (project MCP, meant to be shared). Linked folders are machine-specific, so they live in the
+  `<project>/.mcp.json` (project MCP, meant to be shared), and the skills and commands the user creates, copies,
+  imports or deletes (`<project>/.claude/skills|commands`, `~/.claude/skills|commands`; never over an existing one). Linked folders are machine-specific, so they live in the
   app's data (`userData/projects.json`, launch files in `userData/projects/<key>/`) and reach Claude through
   `--settings` + `--append-system-prompt-file` at launch; nothing is written in the project (2026-09-28). MCP user scope goes
   through `claude mcp add|remove`, never `~/.claude.json`.

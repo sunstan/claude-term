@@ -100,6 +100,8 @@ const api: CtApi = {
     plugins: () => ipcRenderer.invoke('skills:plugins'),
     create: (name, description, root) => ipcRenderer.invoke('skills:create', { name, description, root }),
     remove: (s) => ipcRenderer.invoke('skills:remove', s),
+    copy: (s, root, from) => ipcRenderer.invoke('skills:copy', { s, root, from }),
+    import: (root, o) => ipcRenderer.invoke('skills:import', { root, ...o }),
   },
   mcp: {
     project: (root) => ipcRenderer.invoke('mcp:project', root),

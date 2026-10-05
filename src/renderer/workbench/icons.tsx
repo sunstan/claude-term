@@ -3,7 +3,7 @@ import {
   Files, Search, Box, Plug, Puzzle, Cpu, Clock, Terminal, Plus, X, ChevronRight, ChevronDown, ChevronUp,
   Folder, File, Link, Info, ExternalLink, ArrowUp, List, Activity, Save, Settings, Image, Code, Columns2, Eye, Play, Camera, Sparkle,
   GitBranch, Minus, Check, SquareTerminal, Power, PowerOff, Download, RefreshCw, Gauge, Square, Filter, NotebookPen, Pin, Pencil, MessageSquareText, Trash2,
-  Sun, Moon, SunMoon, LocateFixed, EyeOff, ChevronsDownUp,
+  Sun, Moon, SunMoon, LocateFixed, EyeOff, ChevronsDownUp, Copy,
   type LucideIcon,
 } from 'lucide-react'
 
@@ -20,5 +20,5 @@ export const Icons = {
   claude: (size = 18) => <span className="ico-claude"><Terminal size={size} strokeWidth={1.8} aria-hidden /></span>, git: wrap(GitBranch), minus: wrap(Minus), check: wrap(Check),
   power: wrap(Power), powerOff: wrap(PowerOff), download: wrap(Download), refresh: wrap(RefreshCw), gauge: wrap(Gauge), stop: wrap(Square),
   filter: wrap(Filter), prompt: wrap(MessageSquareText), edit: wrap(Pencil), trash: wrap(Trash2),
-  sun: wrap(Sun), moon: wrap(Moon), sunMoon: wrap(SunMoon), locate: wrap(LocateFixed), eyeOff: wrap(EyeOff), collapseAll: wrap(ChevronsDownUp),
+  sun: wrap(Sun), moon: wrap(Moon), sunMoon: wrap(SunMoon), locate: wrap(LocateFixed), eyeOff: wrap(EyeOff), collapseAll: wrap(ChevronsDownUp), copy: wrap(Copy),
 }

@@ -65,7 +65,7 @@ export function LeftSidebar({ project }: { project: Project }) {
       )}
       {activity === 'search' && <SearchIsland project={project} />}
       {activity === 'history' && <HistoryIsland scope="project" />}
-      {activity === 'skills' && <SkillsIsland title={t('Skills du projet')} root={project.root} createIn={project.root} grow load={async () => [...(await window.ct.skills.project(project.root!)), ...(await window.ct.skills.linked(project.root!))]} />}
+      {activity === 'skills' && <SkillsIsland title={t('Skills du projet')} root={project.root} createIn={project.root} copyTo={{ root: null, label: t('Copier dans mes skills perso') }} grow load={async () => [...(await window.ct.skills.project(project.root!)), ...(await window.ct.skills.linked(project.root!))]} />}
       {activity === 'mcp' && (
         <VStack id="mcp" collapsed={mcpCollapsed}
           top={<McpIsland scope="project" root={project.root} grow />}
@@ -86,6 +86,7 @@ export function RightSidebar() {
   const activity = useWorkbench((s) => s.rightActivity)
   const [width, setWidth] = useStoredSize('right', 320)
   const [pluginsCollapsed, setPluginsCollapsed] = useCollapsed('skills-plugins')
+  const projectRoot = useWorkbench((s) => s.projects.find((p) => p.id === s.activeProjectId)?.root ?? null)
   if (!activity) return null
   return (
     <>
@@ -98,8 +99,9 @@ export function RightSidebar() {
       {activity.includes(':') && <PluginViews activity={activity} />}
       {activity === 'skills' && (
         <VStack id="skills" collapsed={pluginsCollapsed}
-          top={<SkillsIsland title={t('Skills perso')} root={null} createIn={null} grow load={() => window.ct.skills.personal()} />}
-          bottom={<SkillsIsland title={t('Skills des plugins')} root={null} collapsed={pluginsCollapsed} onCollapse={setPluginsCollapsed} load={() => window.ct.skills.plugins()} />}
+          top={<SkillsIsland title={t('Skills perso')} root={null} createIn={null} grow
+            copyTo={projectRoot ? { root: projectRoot, label: t('Copier dans le projet « {p} »', { p: projectRoot.split(/[\\/]/).pop() ?? projectRoot }) } : undefined} load={() => window.ct.skills.personal()} />}
+          bottom={<SkillsIsland title={t('Skills des plugins')} root={null} copyTo={{ root: null, label: t('Copier dans mes skills perso') }} collapsed={pluginsCollapsed} onCollapse={setPluginsCollapsed} load={() => window.ct.skills.plugins()} />}
         />
       )}
     </div>

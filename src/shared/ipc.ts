@@ -349,6 +349,10 @@ export interface CtApi {
     plugins(): Promise<SkillInfo[]>
     create(name: string, description: string, root: string | null): Promise<{ ok: boolean; path?: string; error?: string }>
     remove(s: SkillInfo): Promise<{ ok: boolean; error?: string }>
+    /** into a project (`root`) or the personal skills (null); `from`: the project the skill is listed in */
+    copy(s: SkillInfo, root: string | null, from: string | null): Promise<{ ok: boolean; path?: string; error?: string }>
+    /** a skill folder or a .md file, `path` or picked in a dialog (`pick`) */
+    import(root: string | null, o: { path?: string; pick?: 'file' | 'folder' }): Promise<{ ok: boolean; path?: string; error?: string; canceled?: boolean }>
   }
   mcp: {
     project(root: string): Promise<MCPServer[]>

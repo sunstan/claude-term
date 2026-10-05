@@ -34,7 +34,7 @@ import { PluginStore, type ApprovalRequest } from './services/plugin-store'
 import { catalogueItems, type Catalogue, type RegistryEntry } from '@shared/plugin-registry'
 import { PLUGIN_PERMISSIONS, type PluginPermission } from '@shared/plugins'
 import { isWebUrl, opensInDefaultApp } from '@shared/external'
-import type { DirEntry } from '@shared/ipc'
+import type { DirEntry, SkillInfo } from '@shared/ipc'
 
 // One packaged instance: a second one would drain the same hook spool (userData/events) and take the first one's
 // events. It leaves before any service starts. Dev runs are left out: electron-vite starts the new app before the old
@@ -246,6 +246,28 @@ ipcMain.handle('skills:personal', () => skills.personal())
 ipcMain.handle('skills:plugins', () => skills.plugins())
 ipcMain.handle('skills:create', (_e, { name, description, root }) => ok(() => skills.create(name, description, root)))
 ipcMain.handle('skills:remove', (_e, s) => ok(() => skills.remove(s)))
+// a project root, or null for the personal skills
+const skillRoot = (r: unknown): r is string | null => r === null || (typeof r === 'string' && isAbsolute(r))
+ipcMain.handle('skills:copy', (_e, { s, root, from }: { s: SkillInfo; root: string | null; from: string | null }) => ok(() => {
+  if (!skillRoot(root) || !skillRoot(from) || typeof s?.path !== 'string') throw new Error('emplacement refusé')
+  // only a skill this app lists: the source project's, its linked folders', personal or a plugin's
+  if (!skills.knows(s.path, from ? [from, ...links.load(from).map((l) => l.path)] : [])) throw new Error('skill inconnu')
+  return skills.copy(s, root)
+}))
+ipcMain.handle('skills:import', async (_e, { root, path, pick }: { root: string | null; path?: string; pick?: 'file' | 'folder' }) => {
+  if (!skillRoot(root)) return { ok: false, error: 'emplacement refusé' }
+  let src = path
+  if (!src) {
+    const r = await dialog.showOpenDialog(win!, {
+      title: 'Importer un skill', properties: pick === 'folder' ? ['openDirectory'] : ['openFile'],
+      filters: pick === 'folder' ? undefined : [{ name: 'Markdown', extensions: ['md'] }],
+    })
+    if (r.canceled || !r.filePaths[0]) return { ok: false, canceled: true }
+    src = r.filePaths[0]
+  }
+  if (typeof src !== 'string' || !isAbsolute(src)) return { ok: false, error: 'emplacement refusé' }
+  return ok(() => skills.importFrom(src, root))
+})
 const mcp = new Mcp(undefined, (args) => ptys.claudeCommand(args, false))
 ipcMain.handle('mcp:project', (_e, root: string) => mcp.project(root))
 ipcMain.handle('mcp:linked', (_e, root: string) => links.load(root).flatMap((l) => mcp.project(l.path, 'linked')))

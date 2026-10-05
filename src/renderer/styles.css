@@ -623,3 +623,6 @@ input[type=checkbox]:disabled { opacity: .4; }
 .tree .row .sessions-mark { color: var(--ct-accent); font-size: 10px; margin-left: 2px; }
 .tree .row.drop { background: var(--ct-accent-bg); outline: 1px solid var(--ct-accent); outline-offset: -1px; }
 .tree.drop { outline: 1px solid var(--ct-accent); outline-offset: -1px; }
+.skills-drop { display: flex; flex-direction: column; flex: 1; min-height: 100%; }
+.skills-drop.drop { outline: 1px solid var(--ct-accent); outline-offset: -2px; background: var(--ct-accent-bg); }
+.skills-notice { padding: 6px 12px; font-size: 11.5px; color: var(--ct-text-secondary); }
