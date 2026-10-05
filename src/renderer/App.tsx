@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useReorder } from './workbench/useReorder'
-import { useWorkbench, useActiveProject, isClaude } from './stores/workbench'
+import { useWorkbench, useActiveProject, isClaude, type Tab } from './stores/workbench'
+
 import { applyTheme } from './theme/apply'
 import { Icons } from './workbench/icons'
 import { LeftActivityBar, RightActivityBar } from './workbench/ActivityBar'
@@ -18,6 +19,9 @@ import { usePlugins } from './stores/plugins'
 import { PluginPopover } from './workbench/PluginView'
 import { Palette } from './workbench/Palette'
 import { t } from '@/i18n'
+
+/** A tab doing something now: Claude on a turn, or a shell running a command. */
+const activeNow = (t: Tab) => t.alive && (isClaude(t) ? !!t.working : t.busy)
 
 export function App() {
   const { theme, settings, projects, activeProjectId, init, setActiveProject, newProject, closeProject, newTab, closeTab, showSettings, setShowSettings, moveProject } = useWorkbench()
@@ -86,7 +90,7 @@ export function App() {
             <span style={{ display: 'inline-flex', color: p.id === activeProjectId ? 'var(--ct-accent)' : undefined }}>{Icons.folder(12)}</span>
             <span>{p.root ? p.root.split(/[\\/]/).filter(Boolean).pop() : t('Nouveau projet')}</span>
             {p.tabs.some((t) => t.attention) && <span className="pcount attn">{p.tabs.filter((t) => t.attention).length}</span>}
-            {!p.tabs.some((t) => t.attention) && p.tabs.some((t) => t.alive && (t.busy || isClaude(t))) && <span className="pcount busy">{p.tabs.filter((t) => t.alive && (t.busy || isClaude(t))).length}</span>}
+            {!p.tabs.some((t) => t.attention) && p.tabs.some(activeNow) && <span className="pcount busy" title={t('En cours')}>{p.tabs.filter(activeNow).length}</span>}
             <button className="close" onClick={(e) => { e.stopPropagation(); closeProject(p.id) }} title={t('Fermer le projet')}>{Icons.x(10)}</button>
           </div>
         ))}

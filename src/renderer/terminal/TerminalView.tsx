@@ -126,6 +126,8 @@ export function getOrCreate(tab: Tab, theme: ResolvedTheme, fontFamily: string, 
       if (p) useWorkbench.getState().setCwd(tab.id, p)
       return true
     })
+    // Claude Code's title: a spinner while it works, ✳ at rest
+    term.onTitleChange((title) => useWorkbench.getState().claudeTitle(tab.id, title))
   }
   t = { term, fit, search, el, dispose: () => { unsubs.forEach((u) => u()); term.dispose(); terminals.delete(tab.id) } }
   terminals.set(tab.id, t)

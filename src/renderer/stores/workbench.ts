@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import { isInteractiveClaude } from '@shared/models'
+import { claudeActivity } from '@shared/claude-title'
 import { reorder } from '@shared/order'
 import { clearLine, commandLine, dialectFor } from '@shared/shell'
 import { t } from '@/i18n'
@@ -29,6 +30,8 @@ export interface Tab {
   /** derived Claude session state (main's SessionTracker) */
   session?: SessionState
   attention?: Attention | null
+  /** Claude is working on a turn (the title Claude Code gives its terminal) */
+  working?: boolean
   // file tabs
   fileKind?: 'text' | 'image' | 'other'
   dirty?: boolean
@@ -118,6 +121,8 @@ interface Workbench {
   /** tells main which tab is in front and clears its attention */
   visibleChanged(): void
   setCwd(tabId: string, cwd: string): void
+  /** the terminal's title changed: Claude Code's says whether it is working */
+  claudeTitle(tabId: string, title: string): void
 }
 
 let seq = 0
@@ -335,7 +340,7 @@ export const useWorkbench = create<Workbench>((set, get) => ({
     get().visibleChanged()
   },
   tabExited(ptyId, code) {
-    set((s) => ({ projects: s.projects.map((p) => ({ ...p, tabs: p.tabs.map((t) => (t.ptyId === ptyId ? { ...t, alive: false, exitCode: code, busy: false, claudeRunning: false, run: undefined } : t)) })) }))
+    set((s) => ({ projects: s.projects.map((p) => ({ ...p, tabs: p.tabs.map((t) => (t.ptyId === ptyId ? { ...t, alive: false, exitCode: code, busy: false, claudeRunning: false, working: false, run: undefined } : t)) })) }))
   },
   shellEvent(tabId, msg) {
     const [kind, rest = ''] = msg.split(/;(.*)/s)
@@ -358,7 +363,7 @@ export const useWorkbench = create<Workbench>((set, get) => ({
         // a plugin's command is over once it has run; one that never started (cancelled with ^C, a shell that does not
         // report it) goes at the next prompt too, except the prompt a new tab prints right after it opened
         const over = t.run && (t.run.started || Date.now() - t.run.at > 1500)
-        return { busy: false, lastExit: rest === '' ? null : +rest, claudeRunning: false, title: name(t.cwd), ...(over ? { run: undefined } : {}) }
+        return { busy: false, lastExit: rest === '' ? null : +rest, claudeRunning: false, working: false, title: name(t.cwd), ...(over ? { run: undefined } : {}) }
       }
       return {}
     })
@@ -432,6 +437,17 @@ export const useWorkbench = create<Workbench>((set, get) => ({
     const s = get().settings
     const cwd = tabPathShell() === 'wsl' ? windowsPathFromWsl(reported, s?.wslDistro || undefined) : reported
     patchTab(set, tabId, (t) => (t.cwd === cwd ? {} : { cwd, title: name(cwd) }))
+  },
+  claudeTitle(tabId, title) {
+    const activity = claudeActivity(title)
+    const s = get()
+    const p = s.projects.find((x) => x.tabs.some((t) => t.id === tabId))
+    const t = p?.tabs.find((x) => x.id === tabId)
+    if (!activity || !t || !isClaude(t) || (activity === 'working') === !!t.working) return
+    patchTab(set, tabId, () => ({ working: activity === 'working' }))
+    // a turn that ends out of sight marks the tab (as the Stop hook does), unless something already waits there
+    const seen = p!.id === s.activeProjectId && p!.currentTabId === tabId && document.hasFocus()
+    if (activity === 'idle' && !seen && !t.attention) window.ct.claude.turnEnded(tabId)
   },
 }))
 

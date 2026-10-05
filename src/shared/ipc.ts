@@ -267,6 +267,8 @@ export interface CtApi {
     readText(path: string): Promise<string>
     onAttention(cb: (u: { tabId: string; attention: Attention | null }) => void): () => void
     clearAttention(tabId: string): void
+    /** a Claude turn ended out of sight (the terminal title): the tab is marked done, like the Stop hook does */
+    turnEnded(tabId: string): void
     /** the tab currently visible (for notification and attention decisions) */
     visibleTab(tabId: string | null): void
     onFocusTab(cb: (tabId: string) => void): () => void

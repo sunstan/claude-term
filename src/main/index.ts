@@ -145,6 +145,7 @@ const hooks = new HookHub(new ClaudeSettings(claudeData.settingsPath), () => tra
   () => { const s = settings.get(); return { notifyOS: s.notifyOS, dockBadge: s.dockBadge } }, (tabId) => send('claude:focusTab', { tabId }),
   () => (win && !win.isDestroyed() ? win : null))   // not getAllWindows(): plugin windows are hidden BrowserWindows too
 ipcMain.on('claude:clearAttention', (_e, { tabId }) => hooks.clear(tabId))
+ipcMain.on('claude:turnEnded', (_e, { tabId }) => { if (typeof tabId === 'string') hooks.turnEnded(tabId) })
 ipcMain.on('claude:untrack', (_e, { tabId }) => hooks.clear(tabId))
 ipcMain.handle('hooks:installed', () => hooks.installed())
 const claudeSettingsFile = new ClaudeSettings(claudeData.settingsPath)

@@ -65,7 +65,7 @@ export function Center({ project }: { project: Project }) {
             <div className="tabs">
               {project.tabs.map((t) => (
                 <div key={t.id} {...drag.props(t.id)} className={'tab' + (t.id === project.currentTabId ? ' on' : '') + (t.dirty ? ' dirty' : '') + drag.dropClass(t.id)} onClick={() => setCurrentTab(project.id, t.id)} onContextMenu={(e) => { e.preventDefault(); setCtx({ x: e.clientX, y: e.clientY, tab: t }) }} title={t.kind === 'file' ? t.path : t.busy ? t.lastCommand : t.cwd}>
-                  <span style={{ color: t.kind === 'file' ? (t.changedOnDisk ? 'var(--ct-badge-warn)' : 'var(--ct-text-secondary)') : tabColor(t), display: 'inline-flex', position: 'relative' }} title={t.attention ? attentionLabel(t.attention) : undefined}>
+                  <span className={t.working ? 'tab-working' : undefined} style={{ color: t.kind === 'file' ? (t.changedOnDisk ? 'var(--ct-badge-warn)' : 'var(--ct-text-secondary)') : tabColor(t), display: 'inline-flex', position: 'relative' }} title={t.attention ? attentionLabel(t.attention) : t.working ? tr('Claude travaille') : undefined}>
                     {t.kind === 'diff' ? Icons.columns(12) : t.kind === 'file' ? (t.fileKind === 'image' ? Icons.image(12) : Icons.file(12)) : isClaude(t) ? Icons.claude(12) : Icons.terminal(12)}
                     {t.attention && <span className="attn" style={{ background: attentionColor(t.attention) }} />}
                   </span>

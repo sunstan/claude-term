@@ -59,6 +59,7 @@ const api: CtApi = {
     readText: (path) => ipcRenderer.invoke('claude:readText', path),
     onAttention: (cb) => channel('claude:attention', () => true, (p) => p, cb),
     clearAttention: (tabId) => ipcRenderer.send('claude:clearAttention', { tabId }),
+    turnEnded: (tabId) => ipcRenderer.send('claude:turnEnded', { tabId }),
     visibleTab: (tabId) => ipcRenderer.send('ui:visibleTab', { tabId }),
     onFocusTab: (cb) => channel('claude:focusTab', () => true, (p) => p.tabId as string, cb),
     hooksInstalled: () => ipcRenderer.invoke('hooks:installed'),

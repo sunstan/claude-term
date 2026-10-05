@@ -127,6 +127,17 @@ export class HookHub {
     if (process.platform !== 'darwin' && win && !win.isFocused() && this.getSettings().dockBadge) win.flashFrame(true)
   }
 
+  /**
+   * A Claude turn ended out of sight, read from the terminal's title (works without the hooks). The tab is marked done
+   * unless something already waits there; no OS notification: the Stop hook, when installed, sends its own.
+   */
+  turnEnded(tabId: string) {
+    if (this.attention.has(tabId)) return
+    this.set(tabId, { kind: 'done', message: '' })
+    const win = this.mainWindow()
+    if (process.platform !== 'darwin' && win && !win.isFocused() && this.getSettings().dockBadge) win.flashFrame(true)
+  }
+
   set(tabId: string, a: Attention | null) {
     if (a) this.attention.set(tabId, a); else this.attention.delete(tabId)
     this.send('claude:attention', { tabId, attention: a })
