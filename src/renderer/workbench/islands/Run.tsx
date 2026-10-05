@@ -1,6 +1,6 @@
 import { useEffect, useMemo } from 'react'
 import type { ViewModel } from '@shared/plugins'
-import { runnablesTree } from '@shared/runnables'
+import { fromUserGroup, runnablesTree } from '@shared/runnables'
 import { Icons } from '../icons'
 import { Island, Empty } from '../Island'
 import { PluginViewBody, type Send } from '../PluginView'
@@ -19,21 +19,38 @@ import { t } from '@/i18n'
 export function RunIsland({ project }: { project: Project }) {
   const groups = useRunnables((s) => s.groups)
   const launched = useRunnables((s) => s.launched)
+  const urls = useRunnables((s) => s.urls)
+  const runGroups = useWorkbench((s) => s.settings?.runGroups)
   const tabs = useWorkbench((s) => s.projects)   // runs follow the tabs (started, ended)
   useEffect(() => { useRunnables.getState().load(project.root); useTests.getState().load(project.root) }, [project.root])
   useEffect(() => window.ct.runnables.onChanged((root) => { if (root === useRunnables.getState().root) useRunnables.getState().load(root) }), [])
-  const running = useMemo(() => useRunnables.getState().running(), [launched, tabs])
+  const running = useMemo(() => useRunnables.getState().running(), [launched, tabs, urls])
+  const userGroups = useMemo(() => useRunnables.getState().userGroups(), [runGroups, project.root, groups])
   const model: ViewModel = !project.root ? { kind: 'empty', text: t('Ouvre un projet') }
     : !groups.length && !running.length ? { kind: 'empty', text: t('Rien à lancer ici : pas de package.json, Makefile, Cargo.toml, go.mod ni script.') }
-    : { kind: 'tree', search: true, items: runnablesTree(groups, running) }
+    : { kind: 'tree', search: true, items: runnablesTree(groups, running, userGroups) }
   const r = useRunnables.getState()
   const send: Send = (type, extra) => {
-    const id = extra?.itemId ?? ''
+    const raw = extra?.itemId ?? '', act = extra?.actionId
+    // a script under one of the user's groups is that script
+    const inGroup = fromUserGroup(raw)
+    const id = inGroup?.itemId ?? raw
+    const group = raw.startsWith('ug:') && !inGroup ? raw.slice(3) : null
     const runId = id.startsWith('run:') ? id.slice(4) : r.runOf(id)
-    if (type === 'action' && extra?.actionId === 'stop') { if (runId) r.stop(runId); return }
-    if (type === 'action' && extra?.actionId === 'show') { if (runId) r.show(runId); return }
+    if (group) {
+      if (act === 'group-run') r.runGroup(group)
+      else if (act === 'group-stop') r.stopGroup(group)
+      else if (act === 'group-delete') r.deleteGroup(group)
+      return
+    }
+    if (act === 'group-add') return void r.addToGroup(id)
+    if (act === 'group-remove' && inGroup) return r.removeFromGroup(inGroup.group, inGroup.itemId)
+    if (act === 'install') return r.install(id)
+    if (act === 'stop') { if (runId) r.stop(runId); return }
+    if (act === 'show') { if (runId) r.show(runId); return }
+    if (act === 'open-url') { if (runId) r.openUrl(runId); return }
     if (type === 'open' && id.startsWith('run:')) return r.show(id.slice(4))
-    if ((type === 'action' && extra?.actionId === 'run') || type === 'open') r.runItem(id)
+    if ((type === 'action' && act === 'run') || type === 'open') r.runItem(id)
   }
   // Tests: suites → files → describes → tests, with the last results
   const suites = useTests((s) => s.suites)

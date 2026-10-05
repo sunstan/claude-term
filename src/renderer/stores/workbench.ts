@@ -109,7 +109,12 @@ interface Workbench {
   captureScreen(projectId: string): Promise<void>
   /** runs a command in an idle shell tab of the project (or a new one), cd-ing first when needed */
   /** types commands into a shell tab (strings as is, argv arrays quoted for its shell), chained on success */
-  runCommand(projectId: string, cwd: string, cmds: (string | string[])[], tab?: 'reuse' | 'new', run?: { id: string; label?: string }): Promise<void>
+  /**
+   * Types a command in a free shell tab ('reuse'), a new one, or a given one when it is free (`{ id }`, else a new tab
+   * titled `title`). `show: false` leaves the current tab in front (the new tab's terminal is created at once, so
+   * nothing it prints is lost). Resolves to the tab used.
+   */
+  runCommand(projectId: string, cwd: string, cmds: (string | string[])[], tab?: 'reuse' | 'new' | { id?: string; title?: string }, run?: { id: string; label?: string }, o?: { show?: boolean }): Promise<string | undefined>
   closeTab(projectId: string, tabId: string): Promise<void>
   /** explorer rename / move: file tabs at or under `from` follow (unsaved edits kept) */
   pathMoved(from: string, to: string): Promise<void>
@@ -290,19 +295,28 @@ export const useWorkbench = create<Workbench>((set, get) => ({
       ;(await import('@/terminal/TerminalView')).focusTerminal(t.id)
     } else await get().insertPrompt(projectId, pathsForPrompt(paths, tabPathShell()))
   },
-  async runCommand(projectId, cwd, cmds, tab = 'reuse', run) {
+  async runCommand(projectId, cwd, cmds, tab = 'reuse', run, o = {}) {
     const p = get().projects.find((x) => x.id === projectId)
     if (!p) return
+    const show = o.show !== false
     // a tab waiting for a plugin's command to start is not free either (two ▶ in a row)
     const free = (x: Tab) => x.kind === 'shell' && x.alive && !x.dormant && !x.busy && !x.claudeRunning && !x.run
-    let target = tab === 'reuse' ? (p.tabs.find((x) => x.id === p.currentTabId && free(x)) ?? p.tabs.find(free)) : undefined
+    let target = tab === 'reuse' ? (p.tabs.find((x) => x.id === p.currentTabId && free(x)) ?? p.tabs.find(free))
+      : typeof tab === 'object' && tab.id ? p.tabs.find((x) => x.id === tab.id && free(x)) : undefined
     if (!target) {
+      const front = p.currentTabId
       await get().newTab(projectId, 'shell', cwd)
+      const created = get().projects.find((x) => x.id === projectId)?.tabs.at(-1)
+      if (created && typeof tab === 'object' && tab.title) get().renameTab(created.id, tab.title)
+      if (created && !show && front) {
+        ;(await import('@/terminal/TerminalView')).prepareTerminal(created)
+        get().setCurrentTab(projectId, front)
+      }
       await new Promise((r) => setTimeout(r, 700))
-      target = get().projects.find((x) => x.id === projectId)?.tabs.at(-1)
+      target = get().projects.find((x) => x.id === projectId)?.tabs.find((x) => x.id === created?.id)
     }
     if (!target?.ptyId) return
-    get().setCurrentTab(projectId, target.id)
+    if (show) get().setCurrentTab(projectId, target.id)
     const s = get().settings
     const dialect = dialectFor(window.ct.platform, s?.windowsMode ?? 'native')
     // a WSL shell changes to the folder as WSL names it (tab.cwd keeps the Windows name, see setCwd)
@@ -310,7 +324,8 @@ export const useWorkbench = create<Workbench>((set, get) => ({
     if (run) patchTab(set, target.id, () => ({ run: { id: run.id, label: run.label, started: false, at: Date.now() } }))
     // PowerShell without PSReadLine has no such key: the line is typed as is rather than after stray characters
     window.ct.pty.write(target.ptyId, (dialect === 'posix' || target.clearKey ? clearLine(dialect) : '') + line + '\r')
-    ;(await import('@/terminal/TerminalView')).focusTerminal(target.id)
+    if (show) (await import('@/terminal/TerminalView')).focusTerminal(target.id)
+    return target.id
   },
   async captureScreen(projectId) {
     const p = await window.ct.attachments.captureScreen()

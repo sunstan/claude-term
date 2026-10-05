@@ -6,6 +6,7 @@ import { applyTheme } from './theme/apply'
 import { Icons } from './workbench/icons'
 import { LeftActivityBar, RightActivityBar } from './workbench/ActivityBar'
 import { Tooltips } from './workbench/Tooltips'
+import { useAsk } from './stores/ask'
 import { LeftSidebar, RightSidebar } from './workbench/Sidebars'
 import { Center } from './workbench/Center'
 import { Welcome } from './workbench/Welcome'
@@ -29,6 +30,7 @@ export function App() {
   const drag = useReorder('project', moveProject)
   const project = useActiveProject()
   const [prompt, setPrompt] = useState<import('@shared/plugins').PromptRequest | null>(null)
+  const askReq = useAsk((s) => s.req)
   const popovers = usePlugins((s) => s.popovers)
   const closePopover = usePlugins((s) => s.closePopover)
   useEffect(() => {
@@ -112,6 +114,7 @@ export function App() {
       </div>
       {popovers.map((p) => <PluginPopover key={p.id} id={p.id} anchorViewId={p.anchorViewId} model={p.model} onClose={() => closePopover(p.id)} />)}
       {prompt && <PromptModal req={prompt} onDone={(v) => { window.ct.plugins.promptReply(prompt.id, v); setPrompt(null) }} />}
+      {askReq && !prompt && <PromptModal req={{ id: 0, ...askReq }} onDone={(v) => useAsk.getState().done(v)} />}
       <Palette />
       <Tooltips />
       {showSettings && (

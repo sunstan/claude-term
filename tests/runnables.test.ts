@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { join } from 'node:path'
 import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import { TempDir } from './helpers'
-import { detectRunnables, runnablesTree } from '../src/shared/runnables'
+import { detectRunnables, fromUserGroup, inUserGroup, runnablesTree } from '../src/shared/runnables'
 
 const fsApi = { exists: (p: string) => existsSync(p), read: (p: string) => readFileSync(p, 'utf8'), list: (p: string) => { try { return readdirSync(p, { withFileTypes: true }).map((d) => ({ name: d.name, dir: d.isDirectory() })) } catch { return [] } } }
 
@@ -49,6 +49,37 @@ describe('runnables: running commands', () => {
     expect(items[1].children![1].actions!.map((a) => a.id)).toEqual(['run'])
     expect(items.slice(1).map((g) => g.expanded)).toEqual([false, false])
     expect(runnablesTree([groups[0]] as any, [])[0].expanded).toBe(true)
+  })
+
+  it("offers to open a running script's address", () => {
+    const items = runnablesTree(groups as any, [{ runId: 'r1', itemId: 'npm:/p:dev', command: 'npm run dev', started: true, url: 'http://localhost:5173/' }])
+    expect(items[0].children![0]).toMatchObject({ detail: 'http://localhost:5173/' })
+    expect(items[0].children![0].actions!.map((a) => a.id)).toEqual(['stop', 'open-url', 'show'])
+    expect(items[1].children![0].actions!.map((a) => a.id)).toEqual(['stop', 'open-url', 'show'])
+  })
+
+  it("shows the user's groups first, their scripts under ids of their own, missing scripts left out", () => {
+    const user = [{ name: 'Dev', items: ['npm:/p:dev', 'make:/p:all', 'npm:/gone:x'] }, { name: 'Vide', items: [] }]
+    const items = runnablesTree(groups as any, [{ runId: 'r1', itemId: 'npm:/p:dev', command: 'npm run dev', started: true }], user)
+    expect(items.map((g) => g.id)).toEqual(['g:running', 'ug:Dev', 'ug:Vide', 'npm:/p', 'make:/p'])
+    const dev = items[1]
+    expect(dev.children!.map((c) => [c.id, c.label, c.detail])).toEqual([[inUserGroup('Dev', 'npm:/p:dev'), 'dev', 'web'], [inUserGroup('Dev', 'make:/p:all'), 'all', 'Makefile']])
+    expect(dev.actions!.map((a) => a.id)).toEqual(['group-run', 'group-stop'])
+    expect(dev.children![0].badges).toEqual(['en cours'])
+    expect(dev.children![1].contextMenu).toMatchObject([{ id: 'group-remove' }])
+    expect(items[2]).toMatchObject({ detail: 'vide', children: [] })
+    expect(items[2].actions!.map((a) => a.id)).toEqual(['group-run'])
+    expect(fromUserGroup(dev.children![0].id)).toEqual({ group: 'Dev', itemId: 'npm:/p:dev' })
+    expect(fromUserGroup('npm:/p:dev')).toBeNull()
+  })
+
+  it('npm groups install with their package manager; every script can join a group', () => {
+    const t = new TempDir()
+    t.write('package.json', JSON.stringify({ name: 'x', scripts: { dev: 'vite' } })); t.write('yarn.lock', '')
+    const [g] = detectRunnables(fsApi, t.path)
+    expect(g).toMatchObject({ install: 'yarn install', actions: [{ id: 'install' }] })
+    expect(g.children[0].contextMenu).toMatchObject([{ id: 'group-add' }])
+    t.dispose()
   })
 })
 

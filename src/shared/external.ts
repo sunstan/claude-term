@@ -3,6 +3,10 @@
 /** Web and mail links; any other scheme (file:, javascript:, custom app protocols) stays closed. */
 export const isWebUrl = (url: string): boolean => /^(https?|mailto):/i.test(url)
 
+/** What the app opens in the browser itself: https, or a dev server on this machine (plain http). */
+export const isBrowsable = (url: string): boolean =>
+  /^https:\/\//i.test(url) || /^http:\/\/(?:localhost|[a-z0-9-]+\.localhost|127\.0\.0\.1|\[::1\])(?::\d{1,5})?(?:[/?#]|$)/i.test(url)
+
 /**
  * Files their default app only shows. Everything else, unknown extensions included, is revealed in its folder
  * instead: opening a program, a script or a shortcut runs it (.exe, .bat, .ps1, .js through Windows Script Host,

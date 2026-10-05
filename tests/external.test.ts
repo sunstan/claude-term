@@ -1,7 +1,19 @@
 import { describe, it, expect } from 'vitest'
-import { isWebUrl, opensInDefaultApp } from '../src/shared/external'
+import { isBrowsable, isWebUrl, opensInDefaultApp } from '../src/shared/external'
 
 describe('what leaves the app', () => {
+  it('opens https, and plain http only on this machine', () => {
+    expect(isBrowsable('https://claude.ai/code/artifacts')).toBe(true)
+    expect(isBrowsable('http://localhost:5173/')).toBe(true)
+    expect(isBrowsable('http://127.0.0.1:8000')).toBe(true)
+    expect(isBrowsable('http://app.localhost:3000/x?y')).toBe(true)
+    expect(isBrowsable('http://[::1]:4000/')).toBe(true)
+    expect(isBrowsable('http://example.com/')).toBe(false)
+    expect(isBrowsable('http://localhost.evil.com/')).toBe(false)
+    expect(isBrowsable('file:///etc/passwd')).toBe(false)
+    expect(isBrowsable('mailto:a@b.c')).toBe(false)
+  })
+
   it('lets web and mail links go to the browser', () => {
     expect(isWebUrl('https://claude.com')).toBe(true)
     expect(isWebUrl('HTTP://localhost:5173/')).toBe(true)

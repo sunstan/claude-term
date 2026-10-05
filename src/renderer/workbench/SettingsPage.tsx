@@ -104,10 +104,17 @@ export function SettingsPage({ onClose }: { onClose: () => void }) {
           )}
           {section === 'raccourcis' && <Shortcuts Group={Group} Row={Row} />}
           {section === 'terminal' && (
-            <Group title={t('Police')}>
-              <Row label={t('Police')}>{fontSelect(settings.fontFamily, (v) => set({ fontFamily: v }))}</Row>
-              <Row label={t('Taille')}>{num(settings.fontSize, 9, 24, 'pt', (v) => set({ fontSize: v }))}</Row>
-            </Group>
+            <>
+              <Group title={t('Police')}>
+                <Row label={t('Police')}>{fontSelect(settings.fontFamily, (v) => set({ fontFamily: v }))}</Row>
+                <Row label={t('Taille')}>{num(settings.fontSize, 9, 24, 'pt', (v) => set({ fontSize: v }))}</Row>
+              </Group>
+              <Group title={t('Exécuteurs')}>
+                <Row label={t('Afficher le terminal au lancement')} hint={t("Un script lancé depuis le panneau Exécuter passe au premier plan. Désactivé, il démarre dans son onglet sans quitter celui où tu es.")}>
+                  <Toggle checked={settings.runShow !== false} onChange={(v) => set({ runShow: v })} />
+                </Row>
+              </Group>
+            </>
           )}
           {section === 'claude' && <ClaudeCodeSettings Group={Group} Row={Row} Toggle={Toggle} />}
           {section === 'notifications' && (

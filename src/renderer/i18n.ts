@@ -517,4 +517,9 @@ const EN: Record<string, string> = {
   'Annuler le déplacement de {c} éléments': 'Undo moving {c} items',
   'Annuler la copie de « {n} »': 'Undo copying “{n}”',
   'Annuler la copie de {c} éléments': 'Undo copying {c} items',
+  'Dev': 'Dev',
+  'Ajouter « {s} » au groupe': 'Add “{s}” to the group',
+  'Afficher le terminal au lancement': 'Show the terminal on start',
+  "Un script lancé depuis le panneau Exécuter passe au premier plan. Désactivé, il démarre dans son onglet sans quitter celui où tu es.": 'A script started from the Run panel comes to the front. Off, it starts in its own tab and you stay where you are.',
+  'nom du groupe': 'group name',
 }

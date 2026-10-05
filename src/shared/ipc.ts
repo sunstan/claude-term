@@ -23,7 +23,7 @@ export interface UsageState {
   api?: { at?: number; attemptAt?: number; error?: string; busy?: boolean }
 }
 import type { RunInfo } from './plugins'
-import type { RunGroup } from './runnables'
+import type { RunGroup, UserRunGroup } from './runnables'
 import type { TestNode, TestResult, TestSuite } from './tests'
 import type { Diagnostic, Todo } from './problems'
 import type { PluginInfo, ViewModel, ViewEvent, RunRequest, PromptRequest, PopoverRequest, DiffRequest } from './plugins'
@@ -172,6 +172,10 @@ export interface Settings {
   explorerOpen: Record<string, string[]>
   /** explorer: dotfiles and what git ignores are shown (dimmed) */
   explorerShowHidden: boolean
+  /** Exécuter panel: the user's named groups of scripts, by project root */
+  runGroups: Record<string, UserRunGroup[]>
+  /** a script started from the panel brings its terminal to the front */
+  runShow: boolean
   /** OS notifications when the tab is not visible */
   notifyOS: boolean
   dockBadge: boolean
@@ -214,6 +218,8 @@ export const DEFAULT_SETTINGS: Settings = {
   layout: {},
   explorerOpen: {},
   explorerShowHidden: true,
+  runGroups: {},
+  runShow: true,
   notifyOS: true,
   dockBadge: true,
   windowsMode: 'native',
