@@ -55,6 +55,8 @@ export interface SessionState {
   outputTokens: number
   /** model of the last assistant message and context tokens at that point (transcript) */
   model?: string
+  /** reasoning effort (last assistant message, or a /effort typed since) */
+  effort?: string
   contextTokens?: number
   planPath?: string
   planText: string

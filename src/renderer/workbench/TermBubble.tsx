@@ -57,6 +57,8 @@ export function TermBubble({ tab }: { tab: Tab }) {
           {Icons.claude(12)}<span>{shown ?? tr('modèle')}</span>{Icons.chevronDown(11)}
         </MenuButton>
       )}
+      {/* shown only: /effort also saves the level as Claude Code's default, which the bubble must not change */}
+      {tab.alive && s?.effort && <span className="item dim" title={tr('Effort de raisonnement de la session (/effort pour le changer)')}>{s.effort}</span>}
       {ctx && (
         <span className={'ctx ' + level(ctx.percent).tone} title={ctx.estimated ? tr('Estimé depuis le transcript (le suivi en continu donne le chiffre exact)') : tr('Contexte utilisé')}>
           <span className="mini"><span style={{ width: `${ctx.percent}%` }} /></span>{ctx.estimated ? '≈' : ''}{Math.round(ctx.percent)} %

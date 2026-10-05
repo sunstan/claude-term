@@ -230,6 +230,7 @@ const EN: Record<string, string> = {
   'limite atteinte': 'limit reached',
   'Commandes': 'Commands',
   'Claude travaille': 'Claude is working',
+  'Effort de raisonnement de la session (/effort pour le changer)': 'Reasoning effort of the session (/effort to change it)',
   'En cours': 'Running',
   'Rechercher dans le terminal': 'Find in the terminal',
   'Fermer le projet': 'Close project',

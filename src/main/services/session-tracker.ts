@@ -88,6 +88,7 @@ export class SessionTracker {
           if (s.events.length > 500) s.events.splice(0, s.events.length - 500)
           s.inputTokens += u.inputTokens; s.outputTokens += u.outputTokens
           if (u.model) s.model = u.model
+          if (u.effort) s.effort = u.effort
           if (u.contextTokens !== undefined) s.contextTokens = u.contextTokens
           for (const e of u.events) if (e.file && !isInside(e.file, this.data.plansDir)) s.files[e.file] = (s.files[e.file] ?? 0) + 1
           for (const [p, d] of Object.entries(u.bashDiffs)) (s.bashDiffs[p] ??= []).push(...d)

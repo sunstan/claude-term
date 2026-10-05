@@ -24,6 +24,8 @@ export interface TranscriptUpdate {
   planMode?: boolean
   aiTitle?: string
   permissionMode?: string
+  /** reasoning effort: of the last assistant message, or set by a /effort command (before any reply) */
+  effort?: string
   startedTools: { id: string; name: string; detail: string }[]
   finishedTools: string[]
   /** absolute path → earliest backup (file-history-snapshot records) */
@@ -39,6 +41,7 @@ export function emptyUpdate(): TranscriptUpdate {
 export function isEmptyUpdate(u: TranscriptUpdate): boolean {
   return u.events.length === 0 && u.inputTokens === 0 && u.outputTokens === 0 && u.planPath === undefined
     && u.planMode === undefined && u.aiTitle === undefined && u.permissionMode === undefined && u.model === undefined && u.contextTokens === undefined
+    && u.effort === undefined
     && u.startedTools.length === 0 && u.finishedTools.length === 0
     && Object.keys(u.backups).length === 0 && Object.keys(u.bashDiffs).length === 0
 }
@@ -126,6 +129,7 @@ export function parseTranscript(lines: string[], opts: { plansDir: string; home:
           if (!obj.isSidechain) u.contextTokens = (msg.usage.input_tokens ?? 0) + (msg.usage.cache_read_input_tokens ?? 0) + (msg.usage.cache_creation_input_tokens ?? 0)
         }
         if (typeof msg.model === 'string' && msg.model && msg.model !== '<synthetic>' && !obj.isSidechain) u.model = msg.model
+        if (typeof obj.effort === 'string' && obj.effort && !obj.isSidechain) u.effort = obj.effort
         if (!Array.isArray(msg.content)) break
         for (const item of msg.content) {
           if (item?.type === 'tool_use') {
@@ -165,6 +169,9 @@ export function parseTranscript(lines: string[], opts: { plansDir: string; home:
         }
         const t = textOf(msg.content)
         if (t && !t.startsWith('<')) u.events.push({ id: ++eventSeq, time, kind: 'user', detail: oneLine(t), file: null })
+        // `/effort <level>` is recorded when typed, before Claude answers
+        const effort = t?.includes('<command-name>/effort</command-name>') ? t.match(/<command-args>\s*([a-z]+)\s*<\/command-args>/)?.[1] : undefined
+        if (effort && !obj.isSidechain) u.effort = effort
         break
       }
     }

@@ -82,6 +82,16 @@ describe('transcript parsing', () => {
     expect(plan('c:/Users/j/.claude/plans/y.md')).toBe('c:/Users/j/.claude/plans/y.md')
     expect(plan('C:\\Users\\j\\.claude\\plans-old\\z.md')).toBeUndefined()
   })
+  it('reads the effort of replies and of a /effort typed before the next one', () => {
+    const reply = (effort: string, sidechain = false) => ({ type: 'assistant', effort, isSidechain: sidechain, message: { model: 'claude-opus-5-5', content: [] } })
+    expect(parseTranscript(jsonl([reply('xhigh')]), opts).effort).toBe('xhigh')
+    expect(parseTranscript(jsonl([reply('medium', true)]), opts).effort).toBeUndefined()
+    const typed = { type: 'user', message: { role: 'user', content: '<command-name>/effort</command-name>\n            <command-message>effort</command-message>\n            <command-args>high</command-args>' } }
+    const u = parseTranscript(jsonl([reply('xhigh'), typed]), opts)
+    expect(u.effort).toBe('high')
+    expect(u.events).toHaveLength(0)
+    expect(parseTranscript(jsonl([{ type: 'user', message: { content: '<command-name>/model</command-name><command-args>fable</command-args>' } }]), opts).effort).toBeUndefined()
+  })
   it('parses bash edit diffs', () => {
     const u = parseTranscript(jsonl([{ type: 'user', message: { content: 'x' }, toolUseResult: { bashEditDiff: { files: [{ filePath: '/p/f', hunks: [{ oldStart: 1, oldLines: 1, newStart: 1, newLines: 1, lines: ['-a', '+b'] }] }] } } }]), opts)
     expect(u.bashDiffs['/p/f'][0]).toBe('@@ -1,1 +1,1 @@\n-a\n+b\n')
