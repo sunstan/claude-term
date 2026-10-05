@@ -20,7 +20,8 @@ const node = process.execPath.includes(' ') ? 'node' : process.execPath   // pla
 
 const WEIRD = ["l'app", 'l’app ‘x’', 'a b', '$HOME', '$env:PATH', '"quoted"', 'say "hi" now', 'x&y', 'a|b', 'semi;colon', '@at', 'a,b', '(paren)', '{brace}', 'back\\slash', 'dir\\"x', '*.ts', '~', '-n', '%PATH%', '!bang!', 'émoji ✓', '']
 
-describe('command lines in the real shell', () => {
+// each case starts real shells: slow on Windows while the whole suite runs
+describe('command lines in the real shell', { timeout: 30_000 }, () => {
   it('every argument arrives intact', () => {
     const t = new TempDir()
     const script = t.write('argv.js', 'console.log(JSON.stringify({ argv: process.argv.slice(2), cwd: process.cwd() }))')
