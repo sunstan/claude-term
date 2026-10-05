@@ -52,6 +52,15 @@ jobs:
       - uses: actions/setup-node@v4
         with: { node-version: 22, cache: npm }
       - run: npm ci
+      # dist:mac-all also builds Intel on an Apple silicon runner, where npm installs only the arm64 ripgrep
+      - if: runner.os == 'macOS'
+        run: |
+          V=$(node -p "require('./node_modules/@vscode/ripgrep/package.json').version")
+          for a in arm64 x64; do
+            d=node_modules/@vscode/ripgrep-darwin-$a
+            [ -d "$d" ] && continue
+            mkdir -p "$d" && tar -xzf "$(npm pack @vscode/ripgrep-darwin-$a@$V --silent)" -C "$d" --strip-components=1 && chmod +x "$d/bin/rg"
+          done
       - run: npm test
       - run: npm run ${{ matrix.script }} -- --publish ${{ needs.version.outputs.publish == 'true' && 'always' || 'never' }} --config.extraMetadata.version=${{ needs.version.outputs.version }}
         env:
