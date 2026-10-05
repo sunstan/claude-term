@@ -114,6 +114,13 @@ Handoff for the next session. Design: `docs/DESIGN.md`. Working rules: `CLAUDE.m
   model at 100 % coverage (`tests/git-plugin.test.ts`, `tests/git-worktrees.test.ts`). Plugin API:
   `workspace.projects` / `onDidChangeProjects`, `visible` / `onDidChangeVisibility`, `openProject`, `openUrl`,
   `ui.projectDecoration`, `prompt({ choice })`.
+- **Sessions keep their tab's name** (`userData/session-names.json`): History shows it and finds it, resuming reopens
+  the tab under it, an unnamed tab binding a named session takes it. Plugin trees can ask for Tout replier / Tout
+  déplier (`foldAll`, folds kept per project): the Commit view does. The + menu opens Claude on a model (`--model`).
+- **Dev servers** (`shared/listening.ts`, `services/dev-servers.ts`): Exécuteurs › Scripts shows a Serveurs group, the
+  servers listening under the project's terminals that no script showed, Claude's background ones included (netstat on
+  Windows, lsof on macOS, ss then lsof on Linux; tied to a tab through the process tree; MCP servers left out; only
+  those answering text/html, checked once a minute). Polled every 15 s while the panel is open and a terminal lives.
 - **App icon**: new logo (`build/src/logo.svg`, 800 px full bleed) placed on the macOS grid in
   `build/src/icon.svg` (824 px body, 100 px margin on 1024); `build/icon.png` / `icon.icns` generated from it.
 - **Tabs reopen at launch** (2026-10-10): Claude tabs resume their session, shells reopen in their folder with their last

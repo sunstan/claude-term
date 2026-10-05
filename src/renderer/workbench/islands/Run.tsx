@@ -1,6 +1,7 @@
 import { useEffect, useMemo } from 'react'
 import type { ViewModel } from '@shared/plugins'
-import { fromUserGroup, runnablesTree } from '@shared/runnables'
+import { fromUserGroup, runnablesTree, type ServerRow } from '@shared/runnables'
+import { shortCommand } from '@shared/listening'
 import { Icons } from '../icons'
 import { Island, Empty } from '../Island'
 import { PluginViewBody, type Send } from '../PluginView'
@@ -14,7 +15,7 @@ import { t } from '@/i18n'
 /**
  * The Exécuteurs panel (left): Scripts (npm, make, cargo, go, python, shell scripts of the project, what runs first)
  * and Tests, as full-width tabs above the filter. Scripts is rendered by the same tree as plugin views (search, badges,
- * remembered open state).
+ * remembered open state). Servers listening under the project's terminals show there too, polled while it is open.
  */
 export function RunIsland({ project }: { project: Project }) {
   const groups = useRunnables((s) => s.groups)
@@ -26,9 +27,22 @@ export function RunIsland({ project }: { project: Project }) {
   useEffect(() => window.ct.runnables.onChanged((root) => { if (root === useRunnables.getState().root) useRunnables.getState().load(root) }), [])
   const running = useMemo(() => useRunnables.getState().running(), [launched, tabs, urls])
   const userGroups = useMemo(() => useRunnables.getState().userGroups(), [runGroups, project.root, groups])
+  const servers = useRunnables((s) => s.servers)
+  const hasTerminal = project.tabs.some((x) => x.ptyId && x.alive)
+  useEffect(() => {
+    if (!hasTerminal) return
+    const poll = () => { if (document.visibilityState === 'visible') void useRunnables.getState().pollServers() }
+    poll()
+    const timer = setInterval(poll, 15_000)
+    return () => clearInterval(timer)
+  }, [hasTerminal])
+  const serverRows: (ServerRow & { tabId: string })[] = servers.flatMap((s) => {
+    const tab = project.tabs.find((x) => x.ptyId === s.ptyId)
+    return tab ? [{ port: s.port, url: s.url, command: shortCommand(s.command), tab: tab.customTitle || tab.title, tabId: tab.id }] : []
+  })
   const model: ViewModel = !project.root ? { kind: 'empty', text: t('Ouvre un projet') }
-    : !groups.length && !running.length ? { kind: 'empty', text: t('Rien à lancer ici : pas de package.json, Makefile, Cargo.toml, go.mod ni script.') }
-    : { kind: 'tree', search: true, items: runnablesTree(groups, running, userGroups) }
+    : !groups.length && !running.length && !serverRows.length ? { kind: 'empty', text: t('Rien à lancer ici : pas de package.json, Makefile, Cargo.toml, go.mod ni script.') }
+    : { kind: 'tree', search: true, items: runnablesTree(groups, running, userGroups, serverRows) }
   const r = useRunnables.getState()
   const send: Send = (type, extra) => {
     const raw = extra?.itemId ?? '', act = extra?.actionId
@@ -41,6 +55,12 @@ export function RunIsland({ project }: { project: Project }) {
       if (act === 'group-run') r.runGroup(group)
       else if (act === 'group-stop') r.stopGroup(group)
       else if (act === 'group-delete') r.deleteGroup(group)
+      return
+    }
+    if (id.startsWith('srv:')) {
+      const s = serverRows.find((x) => 'srv:' + x.port === id)
+      if (s && (act === 'open-server' || type === 'open')) window.ct.app.openUrl(s.url)
+      else if (s && act === 'show-tab') useWorkbench.getState().setCurrentTab(project.id, s.tabId)
       return
     }
     if (act === 'group-add') return void r.addToGroup(id)

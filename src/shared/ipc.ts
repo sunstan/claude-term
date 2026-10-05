@@ -26,6 +26,7 @@ import type { RunInfo } from './plugins'
 import type { RunGroup, UserRunGroup } from './runnables'
 import type { TestNode, TestResult, TestSuite } from './tests'
 import type { Diagnostic, Todo } from './problems'
+import type { DevServer } from './listening'
 import type { PluginInfo, ViewModel, ViewEvent, RunRequest, PromptRequest, PopoverRequest, DiffRequest, ProjectDecoration } from './plugins'
 export type PluginDecoration = ProjectDecoration & { root: string; pluginId: string }
 
@@ -401,6 +402,8 @@ export interface CtApi {
   }
   processes: {
     scan(): Promise<ClaudeProcess[]>
+    /** servers listening under the app's terminals that answer a page (Claude's background ones included) */
+    devServers(): Promise<DevServer[]>
     kill(pid: number, signal?: 'SIGTERM' | 'SIGKILL'): void
   }
   search: {

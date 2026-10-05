@@ -99,6 +99,12 @@ const SHOW: ViewAction = { id: 'show', title: 'Afficher le terminal', icon: 'ter
 const OPEN_URL: ViewAction = { id: 'open-url', title: 'Ouvrir dans le navigateur', icon: 'external' }
 const RUN_ALL: ViewAction = { id: 'group-run', title: 'Tout lancer', icon: 'play', primary: true }
 const STOP_ALL: ViewAction = { id: 'group-stop', title: 'Tout arrêter', icon: 'stop' }
+const OPEN_SERVER: ViewAction = { id: 'open-server', title: 'Ouvrir dans le navigateur', icon: 'external', primary: true }
+const SHOW_TAB: ViewAction = { id: 'show-tab', title: 'Afficher son terminal', icon: 'terminal' }
+
+/** A server listening under one of the project's terminals (shared/listening), with the tab it descends from. */
+export interface ServerRow { port: number; url: string; command: string; tab: string }
+const portOf = (url: string) => { try { return Number(new URL(url).port) || null } catch { return null } }
 
 /** The id a script has under a user group in the tree, and back. */
 export const inUserGroup = (name: string, itemId: string) => `ug:${name}|${itemId}`
@@ -109,9 +115,10 @@ export const fromUserGroup = (id: string): { group: string; itemId: string } | n
 
 /**
  * The tree shown: an "En cours" group first (stop, open its address, show), then the user's groups (start or stop
- * together), then what was detected, running scripts badged; detected groups closed by default except a lone one.
+ * together), then the servers listening under the project's terminals that no script showed (Claude starts some in the
+ * background), then what was detected, running scripts badged; detected groups closed by default except a lone one.
  */
-export function runnablesTree(groups: RunGroup[], running: Running[], userGroups: UserRunGroup[] = []): ViewItem[] {
+export function runnablesTree(groups: RunGroup[], running: Running[], userGroups: UserRunGroup[] = [], servers: ServerRow[] = []): ViewItem[] {
   const runOf = new Map(running.filter((r) => r.itemId).map((r) => [normId(r.itemId!), r]))
   const find = (id?: string) => { if (!id) return null; const want = normId(id); for (const g of groups) for (const c of g.children) if (normId(c.id) === want) return { g, c }; return null }
   const runs: ViewItem[] = running.map((r) => {
@@ -135,5 +142,13 @@ export function runnablesTree(groups: RunGroup[], running: Running[], userGroups
     }
   })
   const tree: ViewItem[] = groups.map((g) => ({ ...g, expanded: groups.length === 1, children: g.children.map(withState) }))
-  return [...(runs.length ? [{ id: 'g:running', label: `En cours · ${runs.length}`, icon: 'play', expanded: true, children: runs }] : []), ...mine, ...tree]
+  const shown = new Set(running.map((r) => (r.url ? portOf(r.url) : null)))
+  const srv: ViewItem[] = servers.filter((s) => !shown.has(s.port)).map((s) => ({
+    id: 'srv:' + s.port, label: `localhost:${s.port}`, detail: s.command, icon: 'link', color: 'badge.ok', badges: [s.tab], actions: [OPEN_SERVER, SHOW_TAB],
+  }))
+  return [
+    ...(runs.length ? [{ id: 'g:running', label: `En cours · ${runs.length}`, icon: 'play', expanded: true, children: runs }] : []),
+    ...(srv.length ? [{ id: 'g:servers', label: `Serveurs · ${srv.length}`, icon: 'link', expanded: true, children: srv }] : []),
+    ...mine, ...tree,
+  ]
 }

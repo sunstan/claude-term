@@ -3,6 +3,7 @@ import type { RunGroup, RunItem, Running, UserRunGroup } from '@shared/runnables
 import type { RunLine } from '@shared/run-lines'
 import { normId } from '@shared/run-lines'
 import { DevUrlSniffer } from '@shared/dev-url'
+import type { DevServer } from '@shared/listening'
 import { useWorkbench } from './workbench'
 import { useAsk } from './ask'
 import { t } from '@/i18n'
@@ -22,6 +23,9 @@ interface RunnablesStore {
   scriptTabs: Record<string, string>
   /** run id → the dev server address its output printed */
   urls: Record<string, string>
+  /** servers listening under the app's terminals, Claude's background ones included (pollServers) */
+  servers: DevServer[]
+  pollServers(): Promise<void>
   load(root: string | null): Promise<void>
   item(itemId: string): RunItem | undefined
   /** starts a script in its own tab; shows it when it already runs */
@@ -53,6 +57,12 @@ export const useRunnables = create<RunnablesStore>((set, get) => ({
   launched: {},
   scriptTabs: {},
   urls: {},
+  servers: [],
+  async pollServers() {
+    if (polling) return
+    polling = true
+    try { const servers = await window.ct.processes.devServers(); if (JSON.stringify(servers) !== JSON.stringify(get().servers)) set({ servers }) } finally { polling = false }
+  },
   async load(root) {
     set({ root })
     const groups = root ? await window.ct.runnables.detect(root) : []
@@ -190,3 +200,4 @@ useWorkbench.subscribe((s) => {
   if (kept.length !== Object.keys(scriptTabs).length) useRunnables.setState({ scriptTabs: Object.fromEntries(kept) })
 })
 const seenOnTab = new Set<string>()
+let polling = false

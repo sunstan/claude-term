@@ -33,7 +33,7 @@ async function cimRows(): Promise<ProcRow[]> {
 let inflight: Promise<ProcRow[]> | null = null
 let cached: { at: number; rows: ProcRow[] } | null = null
 const TTL = process.platform === 'win32' ? 4000 : 1500
-function rows(): Promise<ProcRow[]> {
+export function processRows(): Promise<ProcRow[]> {
   if (cached && Date.now() - cached.at < TTL) return Promise.resolve(cached.rows)
   inflight ??= (process.platform === 'win32' ? cimRows() : psRows()).then((r) => { cached = { at: Date.now(), rows: r }; return r }).finally(() => { inflight = null })
   return inflight
@@ -41,7 +41,7 @@ function rows(): Promise<ProcRow[]> {
 
 /** Running `claude` processes on this machine, with the app's terminal each runs in (`ptyPids`: pid → pty id). */
 export async function scanClaudeProcesses(ptyPids: Map<number, string>): Promise<ClaudeProcess[]> {
-  const claude = claudeTree(await rows(), { home: homedir(), ptyPids, now: Date.now() })
+  const claude = claudeTree(await processRows(), { home: homedir(), ptyPids, now: Date.now() })
   if (!claude.length || process.platform === 'win32') return claude
   const lsof = await run('/usr/sbin/lsof', ['-a', '-p', claude.map((c) => c.pid).join(','), '-d', 'cwd', '-Fn'], { LC_ALL: 'C', PATH: '/usr/bin:/bin:/usr/sbin:/sbin' })
   let current: number | null = null

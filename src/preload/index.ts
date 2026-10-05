@@ -132,6 +132,7 @@ const api: CtApi = {
   },
   processes: {
     scan: () => ipcRenderer.invoke('proc:scan'),
+    devServers: () => ipcRenderer.invoke('proc:devServers'),
     kill: (pid, signal) => ipcRenderer.send('proc:kill', { pid, signal }),
   },
   search: {

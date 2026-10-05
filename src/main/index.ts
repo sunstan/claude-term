@@ -20,6 +20,7 @@ import { WorkspaceStore } from './services/workspace'
 import { Skills } from './services/skills'
 import { Mcp } from './services/mcp'
 import { scanClaudeProcesses } from './services/process'
+import { devServers } from './services/dev-servers'
 import { ContentSearch, FileIndex } from './services/search'
 import { Attachments } from './services/attachments'
 import { PluginHost } from './services/plugins'
@@ -324,6 +325,7 @@ const problems = new ProblemsService(runFs, () => ptys.env())
 ipcMain.handle('problems:check', (_e, root: string) => problems.check(root))
 ipcMain.handle('problems:todos', (_e, root: string) => problems.todos(root))
 ipcMain.handle('proc:scan', () => scanClaudeProcesses(ptys.pids()))
+ipcMain.handle('proc:devServers', () => devServers(ptys.pids()))
 ipcMain.on('proc:kill', (_e, { pid, signal }) => { try { process.kill(pid, signal ?? 'SIGTERM') } catch { /* gone */ } })
 const index = new FileIndex()
 ipcMain.handle('search:files', (_e, { root, query }) => index.search(root, query))
