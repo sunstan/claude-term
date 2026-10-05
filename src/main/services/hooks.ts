@@ -96,10 +96,13 @@ export class HookHub {
     if (!t) return
     if (!t.transcriptPath && transcript) t.attachTranscript(transcript)
 
-    const visible = this.isVisible(t.tabId) && (this.mainWindow()?.isFocused() ?? false)
+    const win = this.mainWindow()
+    const visible = this.isVisible(t.tabId) && (win?.isFocused() ?? false)
     if (visible && attention.kind === 'done') return
     this.set(t.tabId, attention)
     if (!visible && this.getSettings().notifyOS) this.notify(t, attention)
+    // Windows / Linux: the taskbar entry flashes until the window gets the focus back (macOS: the Dock badge)
+    if (process.platform !== 'darwin' && win && !win.isFocused() && this.getSettings().dockBadge) win.flashFrame(true)
   }
 
   set(tabId: string, a: Attention | null) {

@@ -1,4 +1,4 @@
-import { app, BrowserWindow, Menu, dialog, ipcMain, shell, nativeTheme, session, net } from 'electron'
+import { app, BrowserWindow, Menu, dialog, ipcMain, nativeImage, shell, nativeTheme, session, net } from 'electron'
 import { join, basename, isAbsolute, resolve, parse } from 'node:path'
 import { homedir } from 'node:os'
 import { execFile, spawnSync } from 'node:child_process'
@@ -369,6 +369,12 @@ ipcMain.on('app:openExternal', (_e, p: string) => {
   if (typeof p !== 'string' || !isAbsolute(p)) return
   if (opensInDefaultApp(p)) shell.openPath(p); else shell.showItemInFolder(p)
 })
+// Windows taskbar: the overlay the renderer drew (count of tabs waiting); a data URL of an image, nothing else
+ipcMain.on('app:setOverlay', (_e, { dataUrl, label }: { dataUrl: string | null; label: string }) => {
+  if (process.platform !== 'win32' || !win || win.isDestroyed()) return
+  const img = typeof dataUrl === 'string' && dataUrl.startsWith('data:image/png;base64,') ? nativeImage.createFromDataURL(dataUrl) : null
+  win.setOverlayIcon(img, typeof label === 'string' ? label : '')
+})
 // web links go to the default browser (https only)
 ipcMain.on('app:openUrl', (_e, url: string) => { if (/^https:\/\//.test(url)) shell.openExternal(url) })
 ipcMain.on('app:reveal', (_e, p: string) => { shell.showItemInFolder(p) })
@@ -389,6 +395,8 @@ app.whenReady().then(() => {
   // plugin windows are hidden BrowserWindows too: closing the workbench window quits
   win.webContents.once('did-finish-load', () => { pluginStore.cleanStaging(); pluginHost.loadAll(); updater.start() })
   win.on('closed', () => { win = null; app.quit() })
+  // the taskbar flashing for a tab waiting (hooks.ts) stops once the window is back
+  win.on('focus', () => win?.flashFrame(false))
 })
 
 app.on('window-all-closed', () => { ptys.killAll(); app.quit() })

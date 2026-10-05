@@ -12,6 +12,7 @@ import { setLanguage } from './i18n'
 import { ACTIONS, binding, matches } from '@shared/keymap'
 import { runAppAction } from './actions'
 import { useUpdate } from './stores/update'
+import { watchTaskbarBadge } from './taskbar'
 import { useUsage } from './stores/usage'
 import { usePlugins } from './stores/plugins'
 import { PluginPopover } from './workbench/PluginView'
@@ -29,6 +30,7 @@ export function App() {
     usePlugins.getState().init()
     useUsage.getState().init()
     useUpdate.getState().init()
+    watchTaskbarBadge()
     window.ct.plugins.onRun((r) => { const s = useWorkbench.getState(); if (s.activeProjectId) s.runCommand(s.activeProjectId, r.cwd, [...(r.command ? [r.command] : []), ...(r.argv ?? [])], r.tab, r.id ? { id: r.id, label: r.label } : undefined) })
     window.ct.plugins.onNotify((n) => { new Notification(n.title, { body: n.body }) })
     window.ct.plugins.onOpenFile((path) => { const s = useWorkbench.getState(); if (s.activeProjectId) s.openFile(s.activeProjectId, path) })

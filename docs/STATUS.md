@@ -16,6 +16,9 @@ Handoff for the next session. Design: `docs/DESIGN.md`. Working rules: `CLAUDE.m
   zsh / bash on the same rc files, folder passed through WSLENV). Checked through ConPTY on Windows 11.
 - **Claude**: transcript tracking, session block (Plan / Activité / Fichiers with per-session diffs), hooks
   (Notification, Stop) → attention, OS notifications, dock badge; attachments (drop, ⌘V image, ⌥⌘S capture).
+  Windows: capture through the Snipping Tool (`SNIP_SCRIPT`: waits on the clipboard sequence number, never reads
+  or clears the clipboard), taskbar overlay with the count of tabs waiting (drawn by `renderer/taskbar.ts`) and
+  flashing until the window has the focus (Linux: flashing).
 - **Editor**: Monaco tabs, dirty by content, auto save on focus loss, confirm on close, reload on external change,
   images, markdown code / split / preview (floating switch, moves under the find bar), JetBrains-like find /
   replace bar (⌘F / ⌘R), side-by-side diff tabs, separate editor fonts, format on save option.

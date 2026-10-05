@@ -121,6 +121,7 @@ export function SettingsPage({ onClose }: { onClose: () => void }) {
               <Group title={t('Alertes')}>
                 <Row label={t('Notifications système')} hint={t("Quand l'onglet n'est pas visible.")}><Toggle checked={settings.notifyOS} onChange={(v) => set({ notifyOS: v })} /></Row>
                 {window.ct.platform === 'darwin' && <Row label={t('Badge du Dock')} hint={t("Nombre d'onglets en attente")}><Toggle checked={settings.dockBadge} onChange={(v) => set({ dockBadge: v })} /></Row>}
+                {window.ct.platform !== 'darwin' && <Row label={t('Barre des tâches')} hint={window.ct.platform === 'win32' ? t("Nombre d'onglets en attente sur l'icône, qui clignote tant que la fenêtre n'est pas au premier plan") : t("L'icône clignote tant que la fenêtre n'est pas au premier plan")}><Toggle checked={settings.dockBadge} onChange={(v) => set({ dockBadge: v })} /></Row>}
               </Group>
             </>
           )}

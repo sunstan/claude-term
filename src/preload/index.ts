@@ -164,6 +164,7 @@ const api: CtApi = {
     pickFolder: () => ipcRenderer.invoke('app:pickFolder'),
     openExternal: (path) => ipcRenderer.send('app:openExternal', path),
     openUrl: (url) => ipcRenderer.send('app:openUrl', url),
+    setOverlay: (dataUrl, label) => ipcRenderer.send('app:setOverlay', { dataUrl, label }),
     revealInFinder: (path) => ipcRenderer.send('app:reveal', path),
     quickLook: (path) => ipcRenderer.send('app:quickLook', path),
   },

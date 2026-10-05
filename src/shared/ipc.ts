@@ -388,6 +388,8 @@ export interface CtApi {
     openExternal(path: string): void
     /** an https link in the default browser */
     openUrl(url: string): void
+    /** Windows taskbar overlay (the count of tabs waiting, drawn by the renderer as a PNG data URL); null clears it */
+    setOverlay(dataUrl: string | null, label: string): void
     revealInFinder(path: string): void
     /** macOS Quick Look (no-op elsewhere) */
     quickLook(path: string): void
