@@ -63,6 +63,7 @@ export function applyKeymap(overrides: Record<string, string>, preset?: KeymapPr
   if (!editor) return
   keymapDisposables.forEach((d) => d.dispose()); keymapDisposables = []
   for (const a of ACTIONS) {
+    if (a.scope === 'terminal') continue
     const kb = monacoKey(binding(a.id, overrides, preset, window.ct.platform === 'darwin'))
     if (kb === null) continue
     const run = a.id === 'actions.find' ? () => openFind(false) : a.id === 'editor.action.startFindReplaceAction' ? () => openFind(true)

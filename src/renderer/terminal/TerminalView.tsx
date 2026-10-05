@@ -2,16 +2,18 @@ import { useEffect, useRef } from 'react'
 import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import { WebglAddon } from '@xterm/addon-webgl'
+import { SearchAddon } from '@xterm/addon-search'
 import type { ResolvedTheme } from '@shared/theme'
 import { OSC_SHELL } from '@shared/ipc'
 import * as pathsMod from '@shared/paths'
 const require_paths = () => pathsMod
 import { useWorkbench, tabPathShell, type Tab } from '@/stores/workbench'
-import { findAction } from '@shared/keymap'
+import { binding, findAction, matches } from '@shared/keymap'
+import { TermFindBar, useTermFind } from './TermFind'
 import { keyEvent } from '@/actions'
 
 /** Terminals live outside React (one xterm per tab), attached to the visible container. */
-const terminals = new Map<string, { term: Terminal; fit: FitAddon; el: HTMLDivElement; dispose: () => void }>()
+const terminals = new Map<string, { term: Terminal; fit: FitAddon; search: SearchAddon; el: HTMLDivElement; dispose: () => void }>()
 if (import.meta.env.DEV || window.ct.debug) (window as any).__ct_termText = (tabId: string) => {
   const t = terminals.get(tabId)?.term; if (!t) return null
   const b = t.buffer.active; const lines: string[] = []
@@ -47,6 +49,8 @@ export function getOrCreate(tab: Tab, theme: ResolvedTheme, fontFamily: string, 
   })
   const fit = new FitAddon()
   term.loadAddon(fit)
+  const search = new SearchAddon({ highlightLimit: 1000 })
+  term.loadAddon(search)
   const el = document.createElement('div')
   el.className = 'term'
   term.open(el)
@@ -64,6 +68,7 @@ export function getOrCreate(tab: Tab, theme: ResolvedTheme, fontFamily: string, 
       // the app's shortcuts go up to the window listener (App.tsx): xterm would send them to the shell and stop them
       const s = useWorkbench.getState().settings
       if (findAction(keyEvent(e), s?.keybindings ?? {}, mac, { preset: s?.keymapPreset, inTerminal: true })) return false
+      if (matches(binding('terminal.find', s?.keybindings ?? {}, s?.keymapPreset, mac), keyEvent(e), mac)) { e.preventDefault(); useTermFind.getState().open(tab.id); return false }
       if (!mac && e.ctrlKey && !e.altKey && !e.metaKey) {
         const k = e.code === 'KeyC' ? 'c' : e.code === 'KeyV' ? 'v' : ''
         // Ctrl+C copies the selection when there is one (Windows Terminal's rule), else it stays the interrupt
@@ -122,7 +127,7 @@ export function getOrCreate(tab: Tab, theme: ResolvedTheme, fontFamily: string, 
       return true
     })
   }
-  t = { term, fit, el, dispose: () => { unsubs.forEach((u) => u()); term.dispose(); terminals.delete(tab.id) } }
+  t = { term, fit, search, el, dispose: () => { unsubs.forEach((u) => u()); term.dispose(); terminals.delete(tab.id) } }
   terminals.set(tab.id, t)
   return t
 }
@@ -154,9 +159,12 @@ export function TerminalHost({ tab }: { tab: Tab }) {
     try { t.fit.fit() } catch {}
   }, [theme, settings.fontFamily, settings.fontSize, tab.id])
 
+  const finding = useTermFind((s) => s.tabId === tab.id)
+  const search = terminals.get(tab.id)?.search
   return (
     <div className="term-wrap" ref={ref}>
       {!tab.alive && <span className="term-dead">terminé{tab.exitCode !== undefined ? ` (${tab.exitCode})` : ''}</span>}
+      {finding && search && <TermFindBar search={search} onDone={() => focusTerminal(tab.id)} />}
     </div>
   )
 }

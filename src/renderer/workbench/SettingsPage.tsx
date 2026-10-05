@@ -8,7 +8,7 @@ import { t } from '@/i18n'
 import { useWorkbench } from '@/stores/workbench'
 import { installedMonoFonts } from './fonts'
 import { ClaudeCodeSettings } from './ClaudeCodeSettings'
-import { ACTIONS, binding, conflicts, defaultBinding, fromEvent, label as keyLabel } from '@shared/keymap'
+import { ACTIONS, binding, conflicts, defaultBinding, fromEvent, label as keyLabel, type KeyAction } from '@shared/keymap'
 
 type Section = 'general' | 'apparence' | 'editeur' | 'raccourcis' | 'terminal' | 'claude' | 'notifications' | 'plugins' | 'windows'
 
@@ -191,7 +191,7 @@ function Shortcuts({ Group, Row }: { Group: (p: { title: string; children: React
     const next = { ...kb }; if (combo === def) delete next[id]; else next[id] = combo
     setKb(next); setRecording(null)
   }
-  const group = (scope: 'general' | 'editor', title: string) => (
+  const group = (scope: KeyAction['scope'], title: string) => (
     <Group title={title}>
       {ACTIONS.filter((a) => a.scope === scope).map((a) => (
         <Row key={a.id} label={t(a.label)} hint={cf[a.id] ? t('En conflit avec : {x}', { x: cf[a.id].map((id) => t(ACTIONS.find((b) => b.id === id)!.label)).join(', ') }) : undefined}>
@@ -216,6 +216,7 @@ function Shortcuts({ Group, Row }: { Group: (p: { title: string; children: React
       {!mac && <div className="cc-bar"><span className="muted">{t('Dans un terminal, Ctrl + lettre reste au shell et à Claude (Ctrl+W efface un mot, Ctrl+R cherche dans l’historique) : seuls les raccourcis avec Maj ou Alt, ou sur une autre touche qu’une lettre, y passent à l’application.')}</span></div>}
       {group('general', t('Général'))}
       {group('editor', t('Éditeur'))}
+      {group('terminal', t('Terminal'))}
     </>
   )
 }

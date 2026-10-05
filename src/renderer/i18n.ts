@@ -229,6 +229,7 @@ const EN: Record<string, string> = {
   '{n} résultat(s) dans {f} fichier(s)': '{n} result(s) in {f} file(s)',
   'limite atteinte': 'limit reached',
   'Commandes': 'Commands',
+  'Rechercher dans le terminal': 'Find in the terminal',
   'Fermer le projet': 'Close project',
   'Modifications non enregistrées': 'Unsaved changes',
   'panneau': 'panel',

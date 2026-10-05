@@ -115,6 +115,9 @@ input:focus { border-color: var(--ct-accent); }
 .term { position: absolute; inset: 0; padding: 6px 0 4px 8px; }
 .term .xterm { height: 100%; }
 .term-dead { position: absolute; right: 10px; top: 8px; font-size: 11px; color: var(--ct-badge-error); }
+/* the terminal's find bar floats under the tab bubble (top right) */
+.findbar.term-find { position: absolute; top: 40px; right: 14px; z-index: 6; border: 1px solid var(--ct-island-border); border-radius: 8px; }
+.findbar.term-find .fb-row input { width: 220px; }
 
 /* file tree */
 .tree { padding: 4px 0; font-size: 12px; }

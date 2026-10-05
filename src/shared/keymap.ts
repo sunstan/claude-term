@@ -4,7 +4,8 @@
  */
 export type KeymapPreset = 'jetbrains' | 'vscode'
 type PerPlatform = string | { mac: string; other: string }
-export interface KeyAction { id: string; scope: 'general' | 'editor'; label: string; default: string; vscode?: PerPlatform }
+/** general: anywhere (and over the others); editor: Monaco; terminal: only while a terminal has the focus */
+export interface KeyAction { id: string; scope: 'general' | 'editor' | 'terminal'; label: string; default: string; vscode?: PerPlatform }
 
 export const ACTIONS: KeyAction[] = [
   // general
@@ -29,6 +30,8 @@ export const ACTIONS: KeyAction[] = [
   { id: 'app.run', scope: 'general', label: 'Exécuteurs', default: 'Mod+7', vscode: 'Mod+Shift+D' },
   { id: 'app.git', scope: 'general', label: 'Git', default: 'Mod+9', vscode: 'Ctrl+Shift+G' },
   { id: 'app.commit', scope: 'general', label: 'Commit', default: 'Mod+K', vscode: '' },
+  // terminal (while it has the focus; its own keys, so not limited to what terminals leave to the app)
+  { id: 'terminal.find', scope: 'terminal', label: 'Rechercher dans le terminal', default: 'Mod+F' },
   // editor (Monaco commands)
   { id: 'editor.action.formatDocument', scope: 'editor', label: 'Reformater le code', default: 'Mod+Alt+L', vscode: 'Alt+Shift+F' },
   { id: 'editor.action.commentLine', scope: 'editor', label: 'Commenter la ligne', default: 'Mod+/' },
