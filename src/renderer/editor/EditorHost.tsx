@@ -4,7 +4,7 @@ import { useProblems } from '@/stores/problems'
 import type { Diagnostic } from '@shared/problems'
 import { monaco, applyMonacoTheme } from './monaco'
 import { useWorkbench, type Tab } from '@/stores/workbench'
-import { ACTIONS, binding, parse } from '@shared/keymap'
+import { ACTIONS, binding, parse, type KeymapPreset } from '@shared/keymap'
 import { runAppAction } from '@/actions'
 import { FindBar, openFind } from './FindBar'
 
@@ -31,7 +31,7 @@ function ensureEditor(s: Parameters<typeof editorOptions>[0]) {
     tabSize: 2, insertSpaces: true, detectIndentation: true, smoothScrolling: true, padding: { top: 8 },
     scrollbar: { verticalScrollbarSize: 10, horizontalScrollbarSize: 10 }, fixedOverflowWidgets: true,
   })
-  applyKeymap(useWorkbench.getState().settings?.keybindings ?? {})
+  applyKeymap(useWorkbench.getState().settings?.keybindings ?? {}, useWorkbench.getState().settings?.keymapPreset)
   attachRunGutter(editor)
   editor.onDidBlurEditorWidget(() => useWorkbench.getState().autoSaveAll())
   editor.onDidChangeModelContent(() => {
@@ -45,7 +45,7 @@ function ensureEditor(s: Parameters<typeof editorOptions>[0]) {
 
 const KEYCODES: Record<string, number> = {
   ArrowUp: monaco.KeyCode.UpArrow, ArrowDown: monaco.KeyCode.DownArrow, ArrowLeft: monaco.KeyCode.LeftArrow, ArrowRight: monaco.KeyCode.RightArrow,
-  Backspace: monaco.KeyCode.Backspace, Delete: monaco.KeyCode.Delete, Enter: monaco.KeyCode.Enter, Space: monaco.KeyCode.Space, Tab: monaco.KeyCode.Tab, Escape: monaco.KeyCode.Escape,
+  Backspace: monaco.KeyCode.Backspace, Delete: monaco.KeyCode.Delete, PageUp: monaco.KeyCode.PageUp, PageDown: monaco.KeyCode.PageDown, Home: monaco.KeyCode.Home, End: monaco.KeyCode.End, '`': monaco.KeyCode.Backquote, Enter: monaco.KeyCode.Enter, Space: monaco.KeyCode.Space, Tab: monaco.KeyCode.Tab, Escape: monaco.KeyCode.Escape,
   '/': monaco.KeyCode.Slash, ',': monaco.KeyCode.Comma, '-': monaco.KeyCode.Minus, '=': monaco.KeyCode.Equal, '[': monaco.KeyCode.BracketLeft, ']': monaco.KeyCode.BracketRight, '.': monaco.KeyCode.Period,
 }
 /** "Mod+Alt+L" → Monaco keybinding number. */
@@ -59,11 +59,11 @@ function monacoKey(s: string): number | null {
 }
 let keymapDisposables: { dispose(): void }[] = []
 /** (Re)binds every keymap action in Monaco: editor actions run the Monaco command, general ones the app action. */
-export function applyKeymap(overrides: Record<string, string>) {
+export function applyKeymap(overrides: Record<string, string>, preset?: KeymapPreset) {
   if (!editor) return
   keymapDisposables.forEach((d) => d.dispose()); keymapDisposables = []
   for (const a of ACTIONS) {
-    const kb = monacoKey(binding(a.id, overrides))
+    const kb = monacoKey(binding(a.id, overrides, preset, window.ct.platform === 'darwin'))
     if (kb === null) continue
     const run = a.id === 'actions.find' ? () => openFind(false) : a.id === 'editor.action.startFindReplaceAction' ? () => openFind(true)
       : a.scope === 'editor' ? () => { editor!.getAction(a.id)?.run() ?? editor!.trigger('keymap', a.id, null) } : () => { runAppAction(a.id) }
@@ -188,7 +188,7 @@ export function EditorHost({ tab }: { tab: Tab }) {
     applyMonacoTheme(theme); themedFor = theme.id
     editor.updateOptions(editorOptions(settings))
   }, [theme, settings.editorFontFamily, settings.editorFontSize, settings.editorLineHeight, settings.editorWordWrap, settings.editorMinimap])
-  useEffect(() => { applyKeymap(settings.keybindings ?? {}) }, [JSON.stringify(settings.keybindings ?? {})])
+  useEffect(() => { applyKeymap(settings.keybindings ?? {}, settings.keymapPreset) }, [JSON.stringify(settings.keybindings ?? {}), settings.keymapPreset])
 
   return (
     <div className="editor-col">

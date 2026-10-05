@@ -24,8 +24,11 @@ Handoff for the next session. Design: `docs/DESIGN.md`. Working rules: `CLAUDE.m
   replace bar (⌘F / ⌘R), side-by-side diff tabs, separate editor fonts, format on save option.
 - **Islands**: explorer + linked folders, search (file names), project history (left) / all history (right),
   skills (project / personal / plugins), MCP (project / user), Claude processes.
-- **Settings modal**: Général (language fr/en/system), Apparence, Éditeur, Raccourcis (JetBrains keymap, recorder,
-  conflicts, reset), Terminal, Claude Code (`~/.claude/settings.json` form), Notifications, Windows.
+- **Settings modal**: Général (language fr/en/system), Apparence, Éditeur, Raccourcis (JetBrains or VS Code preset,
+  recorder, conflicts, reset), Terminal, Claude Code (`~/.claude/settings.json` form), Notifications, Windows.
+- **Shortcuts in terminals**: xterm hands the app's shortcuts over (custom key handler → window listener); on Windows /
+  Linux Ctrl+letter alone stays the shell's (`terminalSafe`), AltGr is never a shortcut. Ctrl+C copies a selection,
+  Ctrl+Shift+V pastes, Ctrl+V in a Windows Claude tab pastes text (bracketed) or sends Alt+V for an image.
 - **Icons**: Catppuccin (MIT) Mocha/Latte, lavender neutrals recolored to the theme grey; Lucide for UI icons.
 - **Plugins**: host in main (vm per plugin), declarative views (list, tree, markdown, diff, stack, detail, graph,
   checkboxes, footer, context menus, search, popover, bottom placement), API typings `resources/plugins/claudeterm.d.ts`.

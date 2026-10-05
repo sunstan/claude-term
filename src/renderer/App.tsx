@@ -9,8 +9,8 @@ import { Center } from './workbench/Center'
 import { Welcome } from './workbench/Welcome'
 import { SettingsPage } from './workbench/SettingsPage'
 import { setLanguage } from './i18n'
-import { ACTIONS, binding, matches } from '@shared/keymap'
-import { runAppAction } from './actions'
+import { findAction } from '@shared/keymap'
+import { keyEvent, runAppAction } from './actions'
 import { useUpdate } from './stores/update'
 import { watchTaskbarBadge } from './taskbar'
 import { useUsage } from './stores/usage'
@@ -60,15 +60,14 @@ export function App() {
   setLanguage(language)
   useEffect(() => { setLanguage(language) }, [language])
 
-  // shortcuts (keymap: JetBrains defaults, overridable in the settings)
+  // shortcuts (keymap: preset defaults, overridable in the settings); a terminal hands over the ones it leaves to the app
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const st = useWorkbench.getState()
       if (e.key === 'Escape' && st.showSettings) { st.setShowSettings(false); return }
       if ((e.target as HTMLElement)?.closest?.('.key-recorder')) return
-      const kb = st.settings?.keybindings ?? {}
-      const mac = window.ct.platform === 'darwin'
-      const hit = ACTIONS.find((a) => a.scope === 'general' && matches(binding(a.id, kb), e, mac))
+      const inTerminal = !!(e.target as HTMLElement)?.closest?.('.xterm')
+      const hit = findAction(keyEvent(e), st.settings?.keybindings ?? {}, window.ct.platform === 'darwin', { preset: st.settings?.keymapPreset, inTerminal })
       if (hit && runAppAction(hit.id)) e.preventDefault()
     }
     window.addEventListener('keydown', onKey)

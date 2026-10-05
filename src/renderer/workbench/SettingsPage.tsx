@@ -8,7 +8,7 @@ import { t } from '@/i18n'
 import { useWorkbench } from '@/stores/workbench'
 import { installedMonoFonts } from './fonts'
 import { ClaudeCodeSettings } from './ClaudeCodeSettings'
-import { ACTIONS, binding, conflicts, fromEvent, label as keyLabel } from '@shared/keymap'
+import { ACTIONS, binding, conflicts, defaultBinding, fromEvent, label as keyLabel } from '@shared/keymap'
 
 type Section = 'general' | 'apparence' | 'editeur' | 'raccourcis' | 'terminal' | 'claude' | 'notifications' | 'plugins' | 'windows'
 
@@ -177,16 +177,17 @@ function Toggle({ checked, onChange, disabled }: { checked: boolean; onChange: (
 function Shortcuts({ Group, Row }: { Group: (p: { title: string; children: ReactNode }) => ReactNode; Row: (p: { label: string; hint?: string; children?: ReactNode }) => ReactNode }) {
   const settings = useWorkbench((s) => s.settings)!
   const kb = settings.keybindings ?? {}
+  const preset = settings.keymapPreset ?? 'jetbrains'
   const mac = window.ct.platform === 'darwin'
   const [recording, setRecording] = useState<string | null>(null)
-  const cf = conflicts(kb)
+  const cf = conflicts(kb, preset, mac)
   const setKb = (next: Record<string, string>) => window.ct.settings.set({ keybindings: next })
   const onKey = (id: string, e: React.KeyboardEvent) => {
     e.preventDefault(); e.stopPropagation()
     if (e.key === 'Escape') return setRecording(null)
     const combo = e.key === 'Backspace' && !e.metaKey && !e.ctrlKey && !e.altKey ? '' : fromEvent(e.nativeEvent, mac)
     if (combo === null) return
-    const def = ACTIONS.find((a) => a.id === id)!.default
+    const def = defaultBinding(ACTIONS.find((a) => a.id === id)!, preset, mac)
     const next = { ...kb }; if (combo === def) delete next[id]; else next[id] = combo
     setKb(next); setRecording(null)
   }
@@ -196,7 +197,7 @@ function Shortcuts({ Group, Row }: { Group: (p: { title: string; children: React
         <Row key={a.id} label={t(a.label)} hint={cf[a.id] ? t('En conflit avec : {x}', { x: cf[a.id].map((id) => t(ACTIONS.find((b) => b.id === id)!.label)).join(', ') }) : undefined}>
           <span className="unit-row">
             <button className={'key-recorder' + (recording === a.id ? ' on' : '') + (cf[a.id] ? ' conflict' : '')} onClick={() => setRecording(a.id)} onKeyDown={(e) => recording === a.id && onKey(a.id, e)} onBlur={() => setRecording(null)}>
-              {recording === a.id ? t('Appuie sur les touches…') : keyLabel(binding(a.id, kb), mac)}
+              {recording === a.id ? t('Appuie sur les touches…') : keyLabel(binding(a.id, kb, preset, mac), mac)}
             </button>
             {kb[a.id] !== undefined && <button className="linkbtn" onClick={() => { const n = { ...kb }; delete n[a.id]; setKb(n) }}>{t('Rétablir')}</button>}
           </span>
@@ -206,7 +207,13 @@ function Shortcuts({ Group, Row }: { Group: (p: { title: string; children: React
   )
   return (
     <>
-      <div className="cc-bar"><span className="muted">{t('Raccourcis par défaut : JetBrains. Clic sur un raccourci puis nouvelle combinaison ; Échap annule, ⌫ efface.')}</span><span className="spacer" />{Object.keys(kb).length > 0 && <button className="btn" onClick={() => setKb({})}>{t('Tout rétablir')}</button>}</div>
+      <div className="cc-bar">
+        <select value={preset} onChange={(e) => window.ct.settings.set({ keymapPreset: e.target.value as 'jetbrains' | 'vscode' })}>
+          <option value="jetbrains">JetBrains</option><option value="vscode">VS Code</option>
+        </select>
+        <span className="muted">{t('Clic sur un raccourci puis nouvelle combinaison ; Échap annule, ⌫ efface.')}</span><span className="spacer" />{Object.keys(kb).length > 0 && <button className="btn" onClick={() => setKb({})}>{t('Tout rétablir')}</button>}
+      </div>
+      {!mac && <div className="cc-bar"><span className="muted">{t('Dans un terminal, Ctrl + lettre reste au shell et à Claude (Ctrl+W efface un mot, Ctrl+R cherche dans l’historique) : seuls les raccourcis avec Maj ou Alt, ou sur une autre touche qu’une lettre, y passent à l’application.')}</span></div>}
       {group('general', t('Général'))}
       {group('editor', t('Éditeur'))}
     </>

@@ -7,6 +7,8 @@ import { OSC_SHELL } from '@shared/ipc'
 import * as pathsMod from '@shared/paths'
 const require_paths = () => pathsMod
 import { useWorkbench, tabPathShell, type Tab } from '@/stores/workbench'
+import { findAction } from '@shared/keymap'
+import { keyEvent } from '@/actions'
 
 /** Terminals live outside React (one xterm per tab), attached to the visible container. */
 const terminals = new Map<string, { term: Terminal; fit: FitAddon; el: HTMLDivElement; dispose: () => void }>()
@@ -55,14 +57,41 @@ export function getOrCreate(tab: Tab, theme: ResolvedTheme, fontFamily: string, 
     unsubs.push(window.ct.pty.onData(id, (d) => term.write(d)))
     unsubs.push(window.ct.pty.onExit(id, (code) => { useWorkbench.getState().tabExited(id, code); term.write(`\r\n\x1b[90m[process terminé, code ${code}]\x1b[0m\r\n`) }))
     term.onData((d) => window.ct.pty.write(id, d))
-    // ⌘V / Ctrl+V with an image on the clipboard: save it and type its path instead of pasting text
+    const mac = window.ct.platform === 'darwin', win = window.ct.platform === 'win32'
+    const isClaudeTab = () => { const t = useWorkbench.getState().projects.flatMap((p) => p.tabs).find((x) => x.ptyId === id); return !!t && (t.kind === 'claude' || t.claudeRunning) }
     term.attachCustomKeyEventHandler((e) => {
-      if (e.type === 'keydown' && (e.metaKey || e.ctrlKey) && e.key === 'v' && !e.shiftKey) {
-        window.ct.attachments.clipboardImage().then((p) => { if (p) window.ct.pty.write(id, require_paths().pathsForPrompt([p], tabPathShell())) })
-        return true   // text paste still goes through xterm's own handler
+      if (e.type !== 'keydown') return true
+      // the app's shortcuts go up to the window listener (App.tsx): xterm would send them to the shell and stop them
+      const s = useWorkbench.getState().settings
+      if (findAction(keyEvent(e), s?.keybindings ?? {}, mac, { preset: s?.keymapPreset, inTerminal: true })) return false
+      if (!mac && e.ctrlKey && !e.altKey && !e.metaKey) {
+        const k = e.code === 'KeyC' ? 'c' : e.code === 'KeyV' ? 'v' : ''
+        // Ctrl+C copies the selection when there is one (Windows Terminal's rule), else it stays the interrupt
+        if (k === 'c' && (term.hasSelection() || e.shiftKey)) {
+          if (term.hasSelection()) { navigator.clipboard.writeText(term.getSelection()); term.clearSelection() }
+          return false
+        }
+        // Ctrl+Shift+V, and Ctrl+V in a Claude tab on Windows: the browser's paste (handled below), sent as a bracketed
+        // paste. Ctrl+V stays ^V elsewhere: PSReadLine pastes the clipboard itself (several lines without running
+        // them), Claude Code on Linux reads its image.
+        if (k === 'v' && (e.shiftKey || (win && isClaudeTab()))) return false
+        if (k === 'v' && win) window.ct.attachments.clipboardImage().then((p) => { if (p) window.ct.pty.write(id, require_paths().pathsForPrompt([p], tabPathShell())) })
       }
       return true
     })
+    // a clipboard holding an image and no text: Claude reads it itself (Alt+V on Windows); a shell gets the saved file's path
+    el.addEventListener('paste', (e) => {
+      const items = Array.from(e.clipboardData?.items ?? [])
+      const image = items.find((i) => i.kind === 'file' && i.type.startsWith('image/'))
+      if (!image || items.some((i) => i.kind === 'string' && i.type === 'text/plain')) return
+      e.preventDefault(); e.stopPropagation()
+      if (win && isClaudeTab()) { window.ct.pty.write(id, '\x1bv'); return }
+      const blob = image.getAsFile()
+      if (!blob) return
+      const fr = new FileReader()
+      fr.onload = async () => { const p = await window.ct.attachments.saveDataUrl(String(fr.result)); if (p) window.ct.pty.write(id, require_paths().pathsForPrompt([p], tabPathShell())) }
+      fr.readAsDataURL(blob)
+    }, true)
     // drop: files (their paths), images (saved), or plain-text paths from our own tree
     el.addEventListener('dragover', (e) => { e.preventDefault(); e.dataTransfer!.dropEffect = 'copy' })
     el.addEventListener('drop', async (e) => {

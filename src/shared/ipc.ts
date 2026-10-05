@@ -143,7 +143,9 @@ export interface Settings {
   autoSave: boolean
   /** editor: run the formatter before writing a file */
   formatOnSave: boolean
-  /** shortcut overrides by action id (defaults: JetBrains, see shared/keymap) */
+  /** defaults the shortcuts start from (shared/keymap) */
+  keymapPreset: 'jetbrains' | 'vscode'
+  /** shortcut overrides by action id, over the preset's defaults */
   keybindings: Record<string, string>
   openProjects: string[]
   recentProjects: string[]
@@ -184,6 +186,7 @@ export const DEFAULT_SETTINGS: Settings = {
   editorMinimap: false,
   autoSave: true,
   formatOnSave: false,
+  keymapPreset: 'jetbrains',
   keybindings: {},
   openProjects: [],
   recentProjects: [],
