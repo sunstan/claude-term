@@ -5,7 +5,7 @@ import { Icons } from './icons'
 import { Island, Empty } from './Island'
 import { diffStats, type EntryDetail, type ToolEvent } from '@shared/claude-format'
 import { useWorkbench, sessionTab, type Project, type Tab } from '@/stores/workbench'
-import { usePlugins } from '@/stores/plugins'
+import { treeKeyOf, usePlugins } from '@/stores/plugins'
 import { PluginViewBody } from './PluginView'
 import { ErrorsView, TodoView } from './ProblemsViews'
 import { useProblems } from '@/stores/problems'
@@ -58,7 +58,7 @@ export function SessionBlock({ project, collapsed, onCollapse }: { project: Proj
   return (
     <Island title={title} actions={actions} collapsible collapsed={collapsed} onCollapse={onCollapse}>
       {mode === 'errors' ? <ErrorsView project={project} /> : mode === 'todo' ? <TodoView project={project} /> : mode.includes(':') ? (
-        <PluginViewBody model={pluginModel} wide layoutKey={mode} send={(type, extra) => window.ct.plugins.event({ viewId: mode, type, ...extra })} />
+        <PluginViewBody model={pluginModel} wide layoutKey={mode} stateKey={treeKeyOf(mode, project.root)} send={(type, extra) => window.ct.plugins.event({ viewId: mode, type, ...extra })} />
       ) : !tab || !session ? (
         <Empty>{t('Sélectionne un onglet Claude, ou tape claude dans un shell')}</Empty>
       ) : mode === 'plan' ? <PlanView tab={tab} /> : mode === 'activity' ? <ActivityView tab={tab} /> : <FilesView tab={tab} />}

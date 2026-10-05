@@ -118,9 +118,9 @@ describe('model: views', { timeout: 30_000 }, () => {
     expect(v2.items.find((g: any) => g.id === 'g:changes').children.find((c: any) => c.id === 'file:a.txt').badges).toEqual([])
     expect(v2.footer.buttons[0]).toMatchObject({ title: 'Commit', disabled: true })
     expect(v2.items.some((g: any) => g.id === 'g:conflicts')).toBe(false)
-    // collapsed groups and detached/ahead-behind labels
-    const v3 = M.changesView({ ...s, collapsed: { 'g:changes': true }, status: { ...s.status, detached: true, ahead: 2, behind: 1 } })
-    expect(v3.items.find((g: any) => g.id === 'g:changes').expanded).toBe(false)
+    // folding is the app's (foldAll on the view); detached / ahead-behind labels
+    const v3 = M.changesView({ ...s, status: { ...s.status, detached: true, ahead: 2, behind: 1 } })
+    expect(v3).toMatchObject({ foldAll: true }); expect(v3.items.every((g: any) => g.expanded === undefined)).toBe(true)
     expect(v3.toolbar[0].title).toBe('Branche : HEAD détachée ↑2 ↓1')
     expect(M.changesView({ ...s, status: { ...s.status, branch: null, detached: false, ahead: 0, behind: 0 } }).toolbar[0].title).toBe('Branche : ?')
     t.dispose()
@@ -140,10 +140,9 @@ describe('model: views', { timeout: 30_000 }, () => {
     expect(local.find((x: any) => x.label === 'feature').contextMenu.find((m: any) => m.id === 'update').disabled).toBe(true)
     expect(b.items[2]).toMatchObject({ id: 'g:remote:origin', label: 'origin' })
     expect(b.items[2].children[0]).toMatchObject({ id: 'remote:origin/main', muted: true })
-    // gone upstream label, detached head label, collapsed
-    const b2 = M.branchesView({ ...s, collapsed: { 'g:local': true }, status: { ...s.status, detached: true }, refs: { local: [{ name: 'x', upstream: 'origin/x', gone: true, ahead: 1, behind: 2, current: false, date: 1 }], remote: [] } })
+    // gone upstream label, detached head label
+    const b2 = M.branchesView({ ...s, status: { ...s.status, detached: true }, refs: { local: [{ name: 'x', upstream: 'origin/x', gone: true, ahead: 1, behind: 2, current: false, date: 1 }], remote: [] } })
     expect(b2.items[0].label).toBe('HEAD (HEAD détachée)')
-    expect(b2.items[1]).toMatchObject({ expanded: false })
     expect(b2.items[1].children[0]).toMatchObject({ detail: 'origin/x (disparue)', extra: '↑1 ↓2' })
     expect(M.branchesView({ ...s, status: { ...s.status, branch: null } }).items[0].label).toBe('HEAD (?)')
     const c = M.commitsView(s)
@@ -178,9 +177,6 @@ describe('model: reduce (events → state and effects)', () => {
     git(r, 'add', 'n1.txt'); git(r, 'commit', '-q', '-m', 'n1')
     s = M.withData(s, r, status(r), log(r), refs(r)); expect(M.checkedPaths(s)).toEqual(['n2.txt'])
     expect(M.withData(s, r, null, [], { local: [], remote: [] }).checked).toEqual({})
-    // toggle all groups
-    s = M.reduce(s, ev('toolbar', { actionId: 'toggleAll' })).state; expect(s.collapsed['g:changes']).toBe(true)
-    s = M.reduce(s, ev('toolbar', { actionId: 'toggleAll' })).state; expect(s.collapsed['g:changes']).toBe(false)
     t.dispose()
   })
   it('commit: validation, commands (untracked add, --amend, push), and the commands work on the repo', () => {
@@ -334,13 +330,11 @@ describe('model: group by directory', () => {
     const un = v.items.find((g: any) => g.id === 'g:untracked')
     expect(un.children.map((c: any) => c.label)).toEqual(['src', 'README.md'])
     const src = un.children[0]
-    expect(src).toMatchObject({ id: 'dir:untracked:src', folder: 'src', checked: false, expanded: true })
+    expect(src).toMatchObject({ id: 'dir:untracked:src', folder: 'src', checked: false })
     expect(src.children.map((c: any) => c.label)).toEqual(['main/services', 'renderer'])
     expect(src.children[0]).toMatchObject({ id: 'dir:untracked:src/main/services' })
     expect(src.children[0].children.map((c: any) => c.id)).toEqual(['file:src/main/services/a.ts', 'file:src/main/services/b.ts'])
     expect(src.children[0].children[0].detail).toBe('')
-    // collapsed directory nodes
-    expect(M.changesView({ ...s, collapsed: { 'dir:untracked:src': true } }).items.find((g: any) => g.id === 'g:untracked').children[0].expanded).toBe(false)
     // checking a directory checks every file under it; checking the group checks all
     s = M.reduce(s, { viewId: 'v', type: 'check', itemId: 'dir:untracked:src/main/services', value: true }).state
     expect(M.checkedPaths(s).sort()).toEqual(['src/main/services/a.ts', 'src/main/services/b.ts'])

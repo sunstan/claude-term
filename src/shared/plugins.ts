@@ -107,7 +107,8 @@ export interface ViewFooter {
 export type ViewModel =
   | { kind: 'empty'; text: string }
   | { kind: 'list'; items: ViewItem[]; toolbar?: ViewAction[]; footer?: ViewFooter; search?: boolean; title?: string; detail?: ViewModel; graph?: boolean }
-  | { kind: 'tree'; items: ViewItem[]; toolbar?: ViewAction[]; footer?: ViewFooter; search?: boolean; title?: string; detail?: ViewModel }
+  /** foldAll: Tout replier / Tout déplier in the header; nodes that disappear forget whether they were folded */
+  | { kind: 'tree'; items: ViewItem[]; toolbar?: ViewAction[]; footer?: ViewFooter; search?: boolean; title?: string; detail?: ViewModel; foldAll?: boolean }
   | { kind: 'markdown'; text: string }
   | { kind: 'diff'; text: string }
   /** panes stacked vertically with draggable separators */

@@ -17,7 +17,8 @@ export interface ViewItem {
 export type ViewModel =
   | { kind: 'empty'; text: string }
   | { kind: 'list'; items: ViewItem[]; toolbar?: ViewAction[] }
-  | { kind: 'tree'; items: ViewItem[]; toolbar?: ViewAction[] }
+  /** foldAll: Tout replier / Tout déplier in the header (the open state is the app's, kept per project) */
+  | { kind: 'tree'; items: ViewItem[]; toolbar?: ViewAction[]; foldAll?: boolean }
   | { kind: 'markdown'; text: string }
   | { kind: 'diff'; text: string }
 export interface ViewEvent { viewId: string; type: 'select' | 'open' | 'action' | 'toolbar'; itemId?: string; actionId?: string }

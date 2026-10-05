@@ -4,7 +4,7 @@ const { LABELS, stashFor, stashMessage, worktreePath } = require('./git')
 const { layout } = require('./graph')
 
 const RUN = (args) => ({ type: 'run', args })
-const initialState = () => ({ root: null, status: null, commits: [], refs: { local: [], remote: [] }, checked: {}, message: '', amend: false, detail: null, collapsed: {}, groupByDir: false,
+const initialState = () => ({ root: null, status: null, commits: [], refs: { local: [], remote: [] }, checked: {}, message: '', amend: false, detail: null, groupByDir: false,
   selectedCommit: null, commitFiles: null, commitInfo: null, stashes: [], worktrees: [], pr: null })
 
 // the choices offered when switching branch with changes in progress
@@ -14,7 +14,7 @@ const samePath = (a, b) => !!a && !!b && a.replace(/\\/g, '/').replace(/\/+$/, '
 const baseName = (p) => p.replace(/[\\/]+$/, '').split(/[\\/]/).pop()
 
 /** Files grouped by directory, single-child chains compacted ("src/main/services"), like JetBrains. */
-function dirTree(entries, checked, group, collapsed) {
+function dirTree(entries, checked, group) {
   const root = { dirs: {}, files: [] }
   for (const e of entries) {
     const parts = e.path.split('/'); let node = root
@@ -27,7 +27,7 @@ function dirTree(entries, checked, group, collapsed) {
       let label = name, child = node.dirs[name], path = prefix ? `${prefix}/${name}` : name
       while (child.files.length === 0 && Object.keys(child.dirs).length === 1) { const only = Object.keys(child.dirs)[0]; label += '/' + only; path += '/' + only; child = child.dirs[only] }
       const id = `dir:${group}:${path}`
-      items.push({ id, label, folder: path, expanded: !collapsed[id], checked: false, children: build(child, path) })
+      items.push({ id, label, folder: path, checked: false, children: build(child, path) })
     }
     for (const e of node.files) items.push({ ...fileItem(e, checked, group), label: e.path.split('/').pop(), detail: '' })
     return items
@@ -58,20 +58,20 @@ function changesView(s) {
   const entries = s.status.entries
   const conflicts = entries.filter((e) => e.conflict), tracked = entries.filter((e) => !e.conflict && !e.untracked), untracked = entries.filter((e) => e.untracked)
   const items = []
-  const kids = (es, group) => (s.groupByDir ? dirTree(es, s.checked, group, s.collapsed) : es.map((e) => fileItem(e, s.checked, group)))
-  if (conflicts.length) items.push({ id: 'g:conflicts', label: `Conflits`, detail: `${conflicts.length}`, expanded: !s.collapsed['g:conflicts'], children: kids(conflicts, 'conflicts') })
-  items.push({ id: 'g:changes', label: 'Modifications', detail: `${tracked.length} fichier${tracked.length > 1 ? 's' : ''}`, expanded: !s.collapsed['g:changes'], children: kids(tracked, 'changes') })
-  if (untracked.length) items.push({ id: 'g:untracked', label: 'Non versionnés', detail: `${untracked.length} fichier${untracked.length > 1 ? 's' : ''}`, expanded: !s.collapsed['g:untracked'], children: kids(untracked, 'untracked') })
+  const kids = (es, group) => (s.groupByDir ? dirTree(es, s.checked, group) : es.map((e) => fileItem(e, s.checked, group)))
+  if (conflicts.length) items.push({ id: 'g:conflicts', label: `Conflits`, detail: `${conflicts.length}`, children: kids(conflicts, 'conflicts') })
+  items.push({ id: 'g:changes', label: 'Modifications', detail: `${tracked.length} fichier${tracked.length > 1 ? 's' : ''}`, children: kids(tracked, 'changes') })
+  if (untracked.length) items.push({ id: 'g:untracked', label: 'Non versionnés', detail: `${untracked.length} fichier${untracked.length > 1 ? 's' : ''}`, children: kids(untracked, 'untracked') })
   const head = s.status.detached ? 'HEAD détachée' : (s.status.branch || '?')
   const ab = (s.status.ahead ? ` ↑${s.status.ahead}` : '') + (s.status.behind ? ` ↓${s.status.behind}` : '')
   const nChecked = Object.keys(s.checked).filter((p) => s.checked[p]).length
+  // folding is the app's (foldAll): kept per project, a folder without changes forgets it
   return {
-    kind: 'tree', items,
+    kind: 'tree', items, foldAll: true,
     toolbar: [
       { id: 'branch', title: `Branche : ${head}${ab}`, icon: 'git' },
       { id: 'refresh', title: 'Actualiser', icon: 'activity' },
       { id: 'groupDirs', title: s.groupByDir ? 'Liste à plat' : 'Grouper par dossier', icon: s.groupByDir ? 'list' : 'folder' },
-      { id: 'toggleAll', title: 'Tout replier / déplier', icon: 'chevronDown' },
     ],
     footer: {
       fields: [{ id: 'message', placeholder: 'Message du commit', value: s.message, multiline: true }],
@@ -118,9 +118,9 @@ function branchesView(s) {
     { id: 'head', label: `HEAD (${cur})`, icon: 'git', color: 'accent' },
     ...(s.pr ? [prItem(s.pr)] : []),
     ...(aside ? [{ id: `stash:${aside.ref}`, label: 'Réappliquer les modifications mises de côté', detail: aside.ref, icon: 'arrowUp', actions: [{ id: 'pop', title: `Réappliquer (git stash pop ${aside.ref})`, icon: 'check', primary: true }] }] : []),
-    { id: 'g:local', label: 'Local', detail: `${local.length}`, expanded: !s.collapsed['g:local'], children: local },
-    ...Object.keys(byRemote).sort().map((r) => ({ id: `g:remote:${r}`, label: r, detail: `${byRemote[r].length}`, expanded: !s.collapsed[`g:remote:${r}`], children: byRemote[r] })),
-    ...(others.length ? [{ id: 'g:worktrees', label: 'Worktrees', detail: `${others.length}`, expanded: !s.collapsed['g:worktrees'], children: others.map((w) => ({
+    { id: 'g:local', label: 'Local', detail: `${local.length}`, children: local },
+    ...Object.keys(byRemote).sort().map((r) => ({ id: `g:remote:${r}`, label: r, detail: `${byRemote[r].length}`, children: byRemote[r] })),
+    ...(others.length ? [{ id: 'g:worktrees', label: 'Worktrees', detail: `${others.length}`, children: others.map((w) => ({
       id: `wt:${w.path}`, label: baseName(w.path), detail: w.branch || 'HEAD détachée', icon: 'columns', badges: [...(w.locked ? ['verrouillé'] : []), ...(w.prunable ? ['introuvable'] : [])],
       actions: [{ id: 'openWorktree', title: 'Ouvrir (projet + Claude)', icon: 'external', primary: true }],
       contextMenu: [{ id: 'openWorktree', title: 'Ouvrir (projet + Claude)', icon: 'external' }, 'sep', { id: 'removeWorktree', title: "Supprimer le worktree (git worktree remove, refusé s'il a des modifications)", icon: 'x' }],
@@ -314,12 +314,6 @@ function reduce(s, e) {
     if (e.actionId === 'pullAll') return { state: s, effects: [{ type: 'pullAll' }] }
     if (e.actionId === 'newWorktree') return { state: s, effects: [{ type: 'prompt', req: { title: 'Nouvelle branche dans un worktree (à côté du dépôt)', placeholder: 'nom de la branche' }, then: { type: 'promptResult', action: 'newWorktree' } }] }
     if (e.actionId === 'groupDirs') return { state: { ...s, groupByDir: !s.groupByDir }, effects: [{ type: 'persist', key: 'groupByDir', value: !s.groupByDir }] }
-    if (e.actionId === 'toggleAll') {
-      const keys = ['g:conflicts', 'g:changes', 'g:untracked']
-      const allCollapsed = keys.every((k) => s.collapsed[k])
-      const collapsed = { ...s.collapsed }; for (const k of keys) collapsed[k] = !allCollapsed
-      return { state: { ...s, collapsed }, effects: ef }
-    }
     return { state: s, effects: ef }
   }
   if (e.type === 'promptResult') {

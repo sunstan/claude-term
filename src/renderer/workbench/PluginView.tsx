@@ -7,7 +7,8 @@ import { Icons } from './icons'
 import { FileIcon } from './FileIcon'
 import { Island, Empty } from './Island'
 import { ContextMenu, type MenuItem } from './Menu'
-import { usePlugins } from '@/stores/plugins'
+import { treeKeyOf, usePlugins } from '@/stores/plugins'
+import { useWorkbench } from '@/stores/workbench'
 import { Gutter, useStoredSize } from './Split'
 import { t } from '@/i18n'
 
@@ -30,21 +31,45 @@ export type Send = (type: 'select' | 'open' | 'action' | 'toolbar' | 'check' | '
 /** Renders a plugin's declarative view model inside an island (sidebar placement). */
 export function PluginViewIsland({ viewId, title, grow }: { viewId: string; title: string; grow?: boolean }) {
   const model = usePlugins((s) => s.views[viewId])
+  const root = useWorkbench((s) => s.projects.find((p) => p.id === s.activeProjectId)?.root)
+  const treeKey = treeKeyOf(viewId, root)
   useEffect(() => { if (!model) window.ct.plugins.view(viewId).then((m) => { if (m) usePlugins.setState((s) => ({ views: { ...s.views, [viewId]: m } })) }) }, [viewId])
   const send: Send = (type, extra) => window.ct.plugins.event({ viewId, type, ...extra })
-  const toolbar = model && 'toolbar' in model && model.toolbar?.length ? (
-    <>{model.toolbar.map((a) => <button key={a.id} title={a.title} disabled={a.disabled} onClick={() => send('toolbar', { actionId: a.id })}>{icon(a.icon, 14)}</button>)}</>
+  const folds = model?.kind === 'tree' && model.foldAll ? groupIds(model.items) : []
+  const toolbar = (model && 'toolbar' in model && model.toolbar?.length) || folds.length ? (
+    <>
+      {model && 'toolbar' in model && model.toolbar?.map((a) => <button key={a.id} title={a.title} disabled={a.disabled} onClick={() => send('toolbar', { actionId: a.id })}>{icon(a.icon, 14)}</button>)}
+      {folds.length > 0 && <>
+        <button title={t('Tout replier')} onClick={() => usePlugins.getState().setAllOpen(treeKey, folds, false)}>{Icons.collapseAll(14)}</button>
+        <button title={t('Tout déplier')} onClick={() => usePlugins.getState().setAllOpen(treeKey, folds, true)}>{Icons.expandAll(14)}</button>
+      </>}
+    </>
   ) : undefined
   return (
     <Island title={(model && 'title' in model && model.title) || title} icon={Icons.puzzle(14)} actions={toolbar} grow={grow} dataView={viewId}>
-      <PluginViewBody model={model} send={send} layoutKey={viewId} />
+      <PluginViewBody model={model} send={send} layoutKey={viewId} stateKey={treeKey} />
     </Island>
   )
 }
 
+/** The nodes of a tree that have children: what folds. */
+function groupIds(items: ViewItem[]): string[] {
+  return items.flatMap((i) => (i.children?.length ? [i.id, ...groupIds(i.children)] : []))
+}
+
 /** The body of a view: list/tree with optional search, footer and detail pane; markdown; diff. */
-export function PluginViewBody({ model, send, wide, layoutKey = 'pv' }: { model: ViewModel | undefined; send: Send; wide?: boolean; layoutKey?: string }) {
+export function PluginViewBody({ model, send, wide, layoutKey = 'pv', stateKey }: { model: ViewModel | undefined; send: Send; wide?: boolean; layoutKey?: string; stateKey?: string }) {
+  // sizes go by layoutKey; open / closed nodes by stateKey (a plugin view's: per project)
+  const treeKey = stateKey ?? layoutKey
   const [q, setQ] = useState('')
+  // a view with foldAll forgets the folds of nodes it no longer shows; not the first model seen under a key, which
+  // may still be another project's
+  const seenKey = useRef<string | null>(null)
+  useEffect(() => {
+    if (model?.kind !== 'tree' || !model.foldAll) return
+    if (seenKey.current === treeKey) usePlugins.getState().forgetMissing(treeKey, new Set(groupIds(model.items)))
+    seenKey.current = treeKey
+  }, [model, treeKey])
   const [ctx, setCtx] = useState<{ x: number; y: number; item: ViewItem } | null>(null)
   // keyboard: a cursor over the visible rows (DOM order); Enter does what a double click does
   const [cursor, setCursor] = useState<string | null>(null)
@@ -57,7 +82,7 @@ export function PluginViewBody({ model, send, wide, layoutKey = 'pv' }: { model:
     const at = i >= 0 ? rows[i] : null
     const go = (r?: HTMLElement) => { if (!r) return; setCursor(r.dataset.id!); r.scrollIntoView({ block: 'nearest' }) }
     const group = at?.dataset.group === '1', open = at?.dataset.open === '1'
-    const toggle = (o: boolean) => at && usePlugins.getState().setOpen(layoutKey, at.dataset.id!, o)
+    const toggle = (o: boolean) => at && usePlugins.getState().setOpen(treeKey, at.dataset.id!, o)
     switch (e.key) {
       case 'ArrowDown': e.preventDefault(); go(i < 0 ? rows[0] : rows[i + 1]); break
       case 'ArrowUp':
@@ -96,7 +121,7 @@ export function PluginViewBody({ model, send, wide, layoutKey = 'pv' }: { model:
       <div className={'list pv' + (model.kind === 'list' && model.graph ? ' graph' : '')} tabIndex={0} ref={listRef} onKeyDown={onListKey}>
         <Cursor.Provider value={{ cursor, setCursor }}>
         {items.length === 0 && <Empty>{q ? t('Aucun résultat') : '—'}</Empty>}
-        {items.map((it) => <Node key={it.id} item={it} depth={0} tree={model.kind === 'tree'} send={send} stateKey={layoutKey} forceOpen={!!q} graphWidth={model.kind === 'list' && model.graph && !q ? Math.max(1, ...model.items.map((x) => x.graph?.width ?? 1)) : 0} onMenu={(e, item) => { e.preventDefault(); e.stopPropagation(); setCtx({ x: e.clientX, y: e.clientY, item }) }} />)}
+        {items.map((it) => <Node key={it.id} item={it} depth={0} tree={model.kind === 'tree'} send={send} stateKey={treeKey} forceOpen={!!q} graphWidth={model.kind === 'list' && model.graph && !q ? Math.max(1, ...model.items.map((x) => x.graph?.width ?? 1)) : 0} onMenu={(e, item) => { e.preventDefault(); e.stopPropagation(); setCtx({ x: e.clientX, y: e.clientY, item }) }} />)}
         </Cursor.Provider>
       </div>
       {model.footer && <Footer footer={model.footer} send={send} />}

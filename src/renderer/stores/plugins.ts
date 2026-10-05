@@ -22,12 +22,22 @@ interface PluginStore {
   /** tree nodes opened / closed by the user (settings.treeState): kept across tab switches and restarts */
   treeState: Record<string, Record<string, boolean>>
   setOpen(viewId: string, itemId: string, open: boolean): void
+  setAllOpen(viewId: string, itemIds: string[], open: boolean): void
+  /** forgets the choices about nodes the view no longer shows (a folder without changes comes back unfolded) */
+  forgetMissing(viewId: string, present: Set<string>): void
   /** chips plugins show on project tabs and linked folders */
   decorations: PluginDecoration[]
   decorationsOf(root: string | null): PluginDecoration[]
 }
 
 let saveTimer: ReturnType<typeof setTimeout> | undefined
+function saveTreeState(get: () => PluginStore) {
+  clearTimeout(saveTimer)
+  saveTimer = setTimeout(() => window.ct.settings.set({ treeState: get().treeState }), 400)
+}
+
+/** Where a plugin view keeps its open / closed nodes: per project, its data being the active project's. */
+export function treeKeyOf(viewId: string, root: string | null | undefined) { return root ? `${viewId}@${root}` : viewId }
 
 export const usePlugins = create<PluginStore>((set, get) => ({
   plugins: [],
@@ -45,14 +55,24 @@ export const usePlugins = create<PluginStore>((set, get) => ({
     const want = sameRoot(root)
     return get().decorations.filter((d) => sameRoot(d.root) === want)
   },
-  setOpen(viewId, itemId, open) {
+  setOpen(viewId, itemId, open) { get().setAllOpen(viewId, [itemId], open) },
+  setAllOpen(viewId, itemIds, open) {
+    if (!itemIds.length) return
     set((s) => {
       // bounded: the oldest choices of a view go first (item ids of closed projects pile up otherwise)
-      const view = Object.entries({ ...s.treeState[viewId], [itemId]: open }).filter(([k]) => k !== itemId).slice(-499)
-      return { treeState: { ...s.treeState, [viewId]: Object.fromEntries([...view, [itemId, open]]) } }
+      const ids = new Set(itemIds)
+      const view = Object.entries(s.treeState[viewId] ?? {}).filter(([k]) => !ids.has(k))
+      return { treeState: { ...s.treeState, [viewId]: Object.fromEntries([...view, ...itemIds.map((id) => [id, open] as const)].slice(-499)) } }
     })
-    clearTimeout(saveTimer)
-    saveTimer = setTimeout(() => window.ct.settings.set({ treeState: get().treeState }), 400)
+    saveTreeState(get)
+  },
+  forgetMissing(viewId, present) {
+    const view = get().treeState[viewId]
+    if (!view) return
+    const kept = Object.entries(view).filter(([k]) => present.has(k))
+    if (kept.length === Object.keys(view).length) return
+    set((s) => ({ treeState: { ...s.treeState, [viewId]: Object.fromEntries(kept) } }))
+    saveTreeState(get)
   },
   init() {
     window.ct.settings.get().then((s) => {
