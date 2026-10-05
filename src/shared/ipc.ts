@@ -35,6 +35,8 @@ export interface PtyCreate {
   resume?: string
   /** exported as CLAUDETERM_ROOT for the shell's `claude` wrapper */
   projectRoot?: string
+  /** the renderer's tab, exported (with this run's instance) as CLAUDETERM_TAB: hook events name the tab they come from */
+  tabId?: string
 }
 
 /** Shell-integration and cwd events parsed from OSC sequences in the renderer. */

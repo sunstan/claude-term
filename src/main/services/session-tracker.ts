@@ -12,6 +12,8 @@ import type { ClaudeData } from './claude-data'
 export class SessionTracker {
   state: SessionState
   private transcript: string | null = null
+  /** the transcript a SessionStart hook named, until Claude Code writes it */
+  private pending: string | null = null
   private offset = 0
   private rest = ''
   private startedAt = Date.now()
@@ -23,7 +25,7 @@ export class SessionTracker {
   private planMtime = -1
   private stopped = false
 
-  get transcriptPath() { return this.transcript }
+  get transcriptPath() { return this.transcript ?? this.pending }
   attachTranscript(path: string) { if (!this.transcript && existsSync(path)) { this.attach(path); this.poll() } }
 
   constructor(
@@ -63,8 +65,12 @@ export class SessionTracker {
     if (this.stopped) return
     if (!this.transcript) {
       if (!this.dirWatcher) this.watchDir()
-      const p = this.data.newestTranscript(this.cwd, this.startedAt - 2000, this.reusesTranscript, this.claimed)
-      if (p) this.attach(p)
+      // the session the hooks named, else the newest unclaimed transcript of the folder
+      if (this.pending) { if (existsSync(this.pending)) { this.attach(this.pending); this.pending = null } }
+      else {
+        const p = this.data.newestTranscript(this.cwd, this.startedAt - 2000, this.reusesTranscript, this.claimed)
+        if (p) this.attach(p)
+      }
     }
     let changed = false
     const newEvents: ToolEvent[] = []
@@ -132,11 +138,36 @@ export class SessionTracker {
     if (this.refreshPlan() || !path) this.emit(this.tabId, this.state, [])
   }
 
+  /**
+   * Claude Code started a session in this tab (SessionStart hook). `startup` binds only a tab that has none yet: a
+   * claude that Claude itself runs (claude -p in its shell) inherits the tab and starts sessions too. `clear`,
+   * `resume` and `compact` move the tab to their transcript.
+   */
+  sessionStarted(path: string, source: string) {
+    if (this.stopped || path === this.transcript || path === this.pending) return
+    if (source === 'startup' && (this.transcript || this.pending)) return
+    if (this.transcript) {
+      this.fileWatcher?.close(); this.fileWatcher = undefined
+      this.claimed.delete(this.transcript)
+      this.transcript = null
+      this.offset = 0; this.rest = ''
+      this.state = emptyState()
+      this.planMtime = -1; this.planWatcher?.close(); this.planWatcher = undefined
+    }
+    // Claude Code writes the transcript with the first message: until then the path waits, claimed for this tab
+    if (this.pending) this.claimed.delete(this.pending)
+    this.pending = path
+    this.claimed.add(path)
+    this.poll()
+    this.emit(this.tabId, this.state, [])
+  }
+
   stop() {
     this.stopped = true
     clearInterval(this.timer)
     this.dirWatcher?.close(); this.fileWatcher?.close(); this.planWatcher?.close()
     if (this.transcript) this.claimed.delete(this.transcript)
+    if (this.pending) this.claimed.delete(this.pending)
   }
 }
 

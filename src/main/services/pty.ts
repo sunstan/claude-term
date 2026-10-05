@@ -3,6 +3,7 @@ import { execFileSync } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { OSC_SHELL, type PtyCreate, type Settings } from '@shared/ipc'
 import { powershellArgs } from '@shared/powershell'
+import { RUN_ID } from './hooks'
 import { ShellIntegration } from './shell-integration'
 import { claudeInvocation, findClaude, type Invocation } from './claude-bin'
 
@@ -51,6 +52,8 @@ export class PtyService {
   create(opts: PtyCreate): { id: string; error?: string } {
     const id = 'pty' + ++this.seq
     const env = this.env()
+    // hook events of a claude run in this terminal (or in its shell) name the tab they come from
+    if (opts.tabId && /^[\w-]+$/.test(opts.tabId)) env.CLAUDETERM_TAB = `${RUN_ID}.${opts.tabId}`
     if (opts.projectRoot) {
       env.CLAUDETERM_ROOT = opts.projectRoot
       // for the shell's `claude` wrapper (shell-integration.ts): the launch files of the linked folders

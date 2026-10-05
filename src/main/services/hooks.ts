@@ -1,19 +1,24 @@
 import { app, Notification, BrowserWindow } from 'electron'
 import { watch, type FSWatcher, mkdirSync, readdirSync, readFileSync, writeFileSync, existsSync, chmodSync, unlinkSync, statSync } from 'node:fs'
 import { join } from 'node:path'
+import { randomBytes } from 'node:crypto'
 import type { Attention } from '@shared/ipc'
 import { ClaudeSettings } from './claude-settings'
 import type { SessionTracker } from './session-tracker'
 
+/** This run of the app: CLAUDETERM_TAB is `<run>.<tab>`, so events left by an earlier run never reach a tab of this one. */
+export const RUN_ID = randomBytes(4).toString('hex')
+
 /**
- * Claude Code hooks (Notification, Stop) spool JSON events into `userData/events` through a small
- * script; this hub drains them, routes each to a tab, keeps the per-tab attention state, fires
- * OS notifications and the dock badge.
+ * Claude Code hooks (Notification, Stop, SessionStart) spool JSON events into `userData/events` through a small
+ * script, which names each file after the tab it comes from (CLAUDETERM_TAB); this hub drains them, routes each to
+ * its tab, keeps the per-tab attention state, fires OS notifications and the dock badge, and binds a tab to the
+ * session Claude Code starts in it (start, resume, /clear, compaction).
  */
 export class HookHub {
   readonly dir: string
   readonly script: string
-  static readonly events = ['Notification', 'Stop']
+  static readonly events = ['Notification', 'Stop', 'SessionStart']
   private watcher?: FSWatcher
   private attention = new Map<string, Attention>()
   private draining = false
@@ -32,6 +37,7 @@ export class HookHub {
     this.script = join(base, process.platform === 'win32' ? 'hook.cmd' : 'hook.sh')
     mkdirSync(this.dir, { recursive: true })
     this.installScript()
+    this.upgrade()
     try { this.watcher = watch(this.dir, () => this.drain()) } catch { setInterval(() => this.drain(), 2000) }
     this.drain()
   }
@@ -47,6 +53,14 @@ export class HookHub {
   /** Claude Code runs hook commands through a shell: the path (which may contain spaces) is quoted. */
   get command(): string { return process.platform === 'win32' ? `"${this.script}"` : shellQuote(this.script) }
   private isOurs = (c: string) => c === this.command || c === this.script || c === `"${this.script}"`
+
+  /** Hooks installed before an event was added get it too: they were wanted, only the list grew. */
+  private upgrade() {
+    const r = this.claudeSettings.read()
+    if (!r.ok) return
+    const have = HookHub.events.filter((ev) => this.claudeSettings.hasHook(r.data, ev, this.command))
+    if (have.length && have.length < HookHub.events.length) this.setInstalled(true)
+  }
 
   installed(): boolean {
     const r = this.claudeSettings.read()
@@ -70,14 +84,29 @@ export class HookHub {
     this.draining = true
     try {
       // files still being written (older scripts wrote the .json directly) are read again shortly
-      if (drainSpool(this.dir, (o) => this.handle(o)) > 0 && !this.retry) this.retry = setTimeout(() => { this.retry = undefined; this.drain() }, 300)
+      if (drainSpool(this.dir, (o, tab) => this.handle(o, tab)) > 0 && !this.retry) this.retry = setTimeout(() => { this.retry = undefined; this.drain() }, 300)
     } finally { this.draining = false }
   }
 
-  private handle(o: any) {
+  /** `tab`: the CLAUDETERM_TAB of the claude that sent the event (a tab of this run when it starts with RUN_ID). */
+  private handle(o: any, tab?: string) {
     const event = String(o.hook_event_name ?? '')
     const transcript = typeof o.transcript_path === 'string' ? o.transcript_path : null
     const cwd = typeof o.cwd === 'string' ? o.cwd : null
+    // route: the tab the event names, then the transcript path, then the cwd
+    const all = [...this.trackers().values()]
+    const own = tab?.startsWith(RUN_ID + '.') ? this.trackers().get(tab.slice(RUN_ID.length + 1)) : undefined
+    const t = own
+      ?? all.find((x) => x.transcriptPath === transcript)
+      ?? all.find((x) => cwd && x.cwd === cwd && !x.transcriptPath)
+      ?? all.find((x) => cwd && x.cwd === cwd)
+    if (!t) return
+
+    if (event === 'SessionStart') {
+      // only a tab that named itself is bound: a session started elsewhere in the same folder is not this tab's
+      if (own && transcript) own.sessionStarted(transcript, String(o.source ?? ''))
+      return
+    }
     const message = String(o.message ?? '')
     const type = String(o.notification_type ?? '')
     let attention: Attention
@@ -87,13 +116,6 @@ export class HookHub {
       else if (type === 'idle_prompt' || /waiting/i.test(message)) attention = { kind: 'idle', message }
       else return   // auth_success and friends
     } else return
-
-    // route: transcript path first, then cwd
-    const all = [...this.trackers().values()]
-    const t = all.find((x) => x.transcriptPath === transcript)
-      ?? all.find((x) => cwd && x.cwd === cwd && !x.transcriptPath)
-      ?? all.find((x) => cwd && x.cwd === cwd)
-    if (!t) return
     if (!t.transcriptPath && transcript) t.attachTranscript(transcript)
 
     const win = this.mainWindow()
@@ -144,7 +166,7 @@ function shellQuote(s: string) { return "'" + s.replace(/'/g, "'\\''") + "'" }
  * than `graceMs` is kept for a later pass (it may still be written); older ones and stale .tmp files are removed.
  * Returns how many files were kept.
  */
-export function drainSpool(dir: string, handle: (event: any) => void, now = Date.now(), graceMs = 5_000): number {
+export function drainSpool(dir: string, handle: (event: any, tab?: string) => void, now = Date.now(), graceMs = 5_000): number {
   let files: { n: string; p: string; t: number }[]
   try { files = readdirSync(dir).flatMap((n) => { try { return [{ n, p: join(dir, n), t: statSync(join(dir, n)).mtimeMs }] } catch { return [] } }) } catch { return 0 }
   // write order (Windows names are random), then name
@@ -161,15 +183,20 @@ export function drainSpool(dir: string, handle: (event: any) => void, now = Date
       continue
     }
     try { unlinkSync(p) } catch { /* gone */ }
-    try { handle(event) } catch (e) { console.error('[hooks]', e) }
+    // "<time>-<rand>~<CLAUDETERM_TAB>.json": the tab the event comes from, when the claude ran in one of ours
+    const tab = n.match(/~([\w.-]+)\.json$/)?.[1]
+    try { handle(event, tab) } catch (e) { console.error('[hooks]', e) }
   }
   return kept
 }
 
-/** The spool script Claude Code runs for our hooks (JSON event on stdin → <dir>/<time>-<pid>-<rand>.json). */
+/**
+ * The spool script Claude Code runs for our hooks (JSON event on stdin → <dir>/<time>-<pid>-<rand>~<tab>.json, the tab
+ * being CLAUDETERM_TAB, empty for a claude started outside the app).
+ */
 export function hookScript(dir: string, platform: string): string {
   return platform === 'win32'
       // written as .tmp then renamed: the app only ever reads complete .json files
-      ? `@echo off\r\nrem ClaudeTerm hook: spools the Claude Code event (JSON on stdin) for the app.\r\nif not exist "${dir}" mkdir "${dir}"\r\nset "f=${dir}\\%RANDOM%%RANDOM%%RANDOM%"\r\nmore > "%f%.tmp"\r\nmove /y "%f%.tmp" "%f%.json" >nul\r\nexit /b 0\r\n`
-      : `#!/bin/sh\n# ClaudeTerm hook: spools the Claude Code event (JSON on stdin) for the app.\nd=${shellQuote(dir)}\nmkdir -p "$d"\nf="$d/$(date +%s)-$$-$RANDOM"\ncat > "$f.tmp" && mv "$f.tmp" "$f.json"\nexit 0\n`
+      ? `@echo off\r\nrem ClaudeTerm hook: spools the Claude Code event (JSON on stdin) for the app.\r\nif not exist "${dir}" mkdir "${dir}"\r\nset "f=${dir}\\%RANDOM%%RANDOM%%RANDOM%~%CLAUDETERM_TAB%"\r\nmore > "%f%.tmp"\r\nmove /y "%f%.tmp" "%f%.json" >nul\r\nexit /b 0\r\n`
+      : `#!/bin/sh\n# ClaudeTerm hook: spools the Claude Code event (JSON on stdin) for the app.\nd=${shellQuote(dir)}\nmkdir -p "$d"\nf="$d/$(date +%s)-$$-$RANDOM~$CLAUDETERM_TAB"\ncat > "$f.tmp" && mv "$f.tmp" "$f.json"\nexit 0\n`
 }

@@ -221,8 +221,9 @@ export const useWorkbench = create<Workbench>((set, get) => ({
     const p = get().projects.find((x) => x.id === projectId)
     if (!p) return
     const dir = cwd ?? p.selectedFolder
-    const { id: ptyId, error } = await window.ct.pty.create({ cwd: dir, kind, projectRoot: p.root ?? undefined, resume })
-    const tab: Tab = { id: 't' + ++seq, kind, title: name(dir), cwd: dir, ptyId, alive: !error, busy: false, lastCommand: '', lastExit: null, claudeRunning: false }
+    const id = 't' + ++seq
+    const { id: ptyId, error } = await window.ct.pty.create({ cwd: dir, kind, projectRoot: p.root ?? undefined, resume, tabId: id })
+    const tab: Tab = { id, kind, title: name(dir), cwd: dir, ptyId, alive: !error, busy: false, lastCommand: '', lastExit: null, claudeRunning: false }
     if (error) tab.title += ' (erreur)'
     set((s) => ({ projects: s.projects.map((x) => (x.id === projectId ? { ...x, tabs: [...x.tabs, tab], currentTabId: tab.id } : x)), lastClaudeTab: kind === 'claude' ? { ...s.lastClaudeTab, [projectId]: tab.id } : s.lastClaudeTab }))
     if (error) console.error(error)

@@ -43,6 +43,36 @@ describe('SessionTracker', () => {
     t.dispose()
   }, 10_000)
 
+  it('moves to the session the hooks name after /clear, even before its transcript exists; ignores a nested startup', async () => {
+    const t = new TempDir()
+    const cwd = join(t.path, 'proj')
+    const dir = join(t.path, '.claude', 'projects', encodeProjectPath(cwd))
+    const data = new ClaudeData(t.path)
+    t.write(join(dir, 'a.jsonl'), jsonl([{ type: 'user', cwd, timestamp: 't1', message: { content: 'avant /clear' } }]))
+    const claimed = new Set<string>()
+    const states: SessionState[] = []
+    const tracker = new SessionTracker('tab1', cwd, data, claimed, (_id, s) => states.push(structuredClone(s)), { resume: 'a' })
+    await sleep(100)
+    expect(states.at(-1)?.sessionId).toBe('a')
+    // /clear: the new session's transcript is written with its first message
+    const b = join(dir, 'b.jsonl')
+    tracker.sessionStarted(b, 'clear')
+    expect(states.at(-1)?.events).toEqual([])
+    expect(tracker.transcriptPath).toBe(b)
+    expect(claimed.has(b)).toBe(true)
+    expect(claimed.has(join(dir, 'a.jsonl'))).toBe(false)
+    // a claude that Claude runs in its shell inherits the tab: its startup must not take the tab
+    tracker.sessionStarted(join(dir, 'nested.jsonl'), 'startup')
+    expect(tracker.transcriptPath).toBe(b)
+    t.write(b, jsonl([{ type: 'user', cwd, timestamp: 't2', message: { content: 'après /clear' } }]))
+    await sleep(1800)
+    expect(states.at(-1)?.sessionId).toBe('b')
+    expect(states.at(-1)?.events.map((e) => e.detail)).toEqual(['après /clear'])
+    tracker.stop()
+    expect(claimed.size).toBe(0)
+    t.dispose()
+  }, 10_000)
+
   it('follows a plan file and reloads it when it changes', async () => {
     const t = new TempDir()
     const cwd = join(t.path, 'proj')
