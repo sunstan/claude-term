@@ -91,6 +91,9 @@ export class PtyService {
     }
   }
 
+  /** pid of each terminal's process (its shell, or claude) → pty id */
+  pids(): Map<number, string> { return new Map([...this.handles.values()].map((h) => [h.proc.pid, h.id])) }
+
   write(id: string, data: string) { this.handles.get(id)?.proc.write(data) }
   resize(id: string, cols: number, rows: number) {
     if (cols > 0 && rows > 0) this.handles.get(id)?.proc.resize(cols, rows)

@@ -46,8 +46,11 @@ if (process.platform === 'win32' && app.isPackaged) app.setAppUserModelId('fr.je
 if (!app.isPackaged || process.env.CT_CDP_PORT) {
   const port = process.env.CT_CDP_PORT || '9333'
   // dev restarts (electron-vite) start the new app before the old one has let go of the port: wait for it (≤ 3 s)
-  if (!app.isPackaged && process.platform !== 'win32') {
-    for (let i = 0; i < 30 && spawnSync('lsof', ['-ti', `tcp:${port}`, '-sTCP:LISTEN']).stdout?.length; i++) spawnSync('sleep', ['0.1'])
+  if (!app.isPackaged) {
+    const held = process.platform === 'win32'
+      ? () => new RegExp(`:${port}\\s+\\S+\\s+LISTENING`).test(String(spawnSync('netstat', ['-ano', '-p', 'TCP'], { windowsHide: true }).stdout ?? ''))
+      : () => !!spawnSync('lsof', ['-ti', `tcp:${port}`, '-sTCP:LISTEN']).stdout?.length
+    for (let i = 0; i < 30 && held(); i++) Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 100)
   }
   app.commandLine.appendSwitch('remote-debugging-port', port)
 }
@@ -241,7 +244,7 @@ ipcMain.handle('tests:results', () => testsService.results())
 const problems = new ProblemsService(runFs, () => ptys.env())
 ipcMain.handle('problems:check', (_e, root: string) => problems.check(root))
 ipcMain.handle('problems:todos', (_e, root: string) => problems.todos(root))
-ipcMain.handle('proc:scan', () => scanClaudeProcesses())
+ipcMain.handle('proc:scan', () => scanClaudeProcesses(ptys.pids()))
 ipcMain.on('proc:kill', (_e, { pid, signal }) => { try { process.kill(pid, signal ?? 'SIGTERM') } catch { /* gone */ } })
 const index = new FileIndex()
 ipcMain.handle('search:files', (_e, { root, query }) => index.search(root, query))

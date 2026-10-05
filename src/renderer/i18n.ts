@@ -262,6 +262,8 @@ const EN: Record<string, string> = {
   'Retirer le serveur « {name} » ?': 'Remove server “{name}”?',
   'Aucun process claude en cours': 'No claude process running',
   'onglet': 'tab',
+  'cet onglet': 'this tab',
+  'lancé ailleurs': 'started elsewhere',
   'sous-process': 'child processes',
   "Aller à l'onglet": 'Go to tab',
   'Arrêter (SIGTERM)': 'Stop (SIGTERM)',

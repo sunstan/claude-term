@@ -106,9 +106,14 @@ export interface ClaudeProcess {
   pid: number
   started: number
   elapsed: string
+  /** '' where the platform's table has none (Windows) */
   cpu: string
   memMB: number
+  /** '?' where it cannot be read (Windows) */
   cwd: string
+  command?: string
+  /** the app's terminal it runs in (its shell or itself is that pty's process); absent: started elsewhere */
+  ptyId?: string
   children: { pid: number; command: string; cpu: string }[]
 }
 
