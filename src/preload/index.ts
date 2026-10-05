@@ -20,7 +20,7 @@ const api: CtApi = {
     onExit: (id, cb) => channel('pty:exit', (p) => p.id === id, (p) => p.code as number, cb),
   },
   fs: {
-    readdir: (path) => ipcRenderer.invoke('fs:readdir', path),
+    readdir: (path, marks) => ipcRenderer.invoke('fs:readdir', path, !!marks),
     exists: (path) => ipcRenderer.invoke('fs:exists', path),
     readFile: (path) => ipcRenderer.invoke('fs:readFile', path),
     writeFile: (path, text) => ipcRenderer.invoke('fs:writeFile', { path, text }),

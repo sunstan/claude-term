@@ -16,6 +16,9 @@ import { PluginsIsland } from './islands/Plugins'
 import { RunIsland } from './islands/Run'
 import { MemoIsland, MemoAllIsland } from './islands/Memo'
 import { usePlugins } from '@/stores/plugins'
+import { useExplorer } from '@/stores/explorer'
+import { isInside } from '@shared/claude-format'
+import { withShortcut } from '@/actions'
 
 function PluginViews({ activity }: { activity: string }) {
   const plugins = usePlugins((s) => s.plugins)
@@ -24,6 +27,22 @@ function PluginViews({ activity }: { activity: string }) {
   return <PStack ids={views.map((v) => v.id)}>{views.map((v) => <PluginViewIsland key={v.id} viewId={v.id} title={v.title} grow />)}</PStack>
 }
 import { t } from '@/i18n'
+
+/** Explorer header: reveal the shown file, collapse every folder, hidden and ignored files, the folder in the OS. */
+function ExplorerActions({ project }: { project: Project }) {
+  const showHidden = useWorkbench((s) => s.settings?.explorerShowHidden ?? true)
+  const file = project.tabs.find((x) => x.id === project.currentTabId && x.kind === 'file')?.path
+  const root = project.root
+  return (
+    <>
+      <button title={withShortcut(t('Révéler le fichier affiché'), 'app.revealFile')} disabled={!file || !root || !isInside(file, root)} onClick={() => file && useExplorer.getState().revealPath(file)}>{Icons.locate(15)}</button>
+      <button title={t('Tout replier')} disabled={!root} onClick={() => root && useExplorer.getState().collapseAll(root)}>{Icons.collapseAll(15)}</button>
+      <button title={showHidden ? t('Cacher les fichiers masqués et ceux que git ignore') : t('Afficher les fichiers masqués (.env, .claude…) et ceux que git ignore')}
+        onClick={() => window.ct.settings.set({ explorerShowHidden: !showHidden })}>{showHidden ? Icons.eye(15) : Icons.eyeOff(15)}</button>
+      <button title={t(window.ct.platform === 'darwin' ? 'Afficher dans le Finder' : "Afficher dans l'explorateur")} onClick={() => root && window.ct.app.revealInFinder(root)}>{Icons.external()}</button>
+    </>
+  )
+}
 
 export function LeftSidebar({ project }: { project: Project }) {
   const activity = useWorkbench((s) => s.leftActivity)
@@ -38,8 +57,7 @@ export function LeftSidebar({ project }: { project: Project }) {
       {activity === 'explorer' && (
         <VStack id="explorer" collapsed={linksCollapsed} initial={200}
           top={
-            <Island title={name} icon={Icons.folder(14)} grow
-              actions={<button title={t('Afficher dans le Finder')} onClick={() => project.root && window.ct.app.revealInFinder(project.root)}>{Icons.external()}</button>}>
+            <Island title={name} icon={Icons.folder(14)} grow actions={<ExplorerActions project={project} />}>
               {project.root ? <FileTree project={project} root={project.root} /> : <Empty>{t('Aucun dossier')}</Empty>}
             </Island>}
           bottom={<LinksIsland project={project} collapsed={linksCollapsed} onCollapse={setLinksCollapsed} />}

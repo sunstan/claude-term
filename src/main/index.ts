@@ -13,6 +13,7 @@ import { ClaudeSettings } from './services/claude-settings'
 import { HookHub } from './services/hooks'
 import { FileService, DirWatcher } from './services/files'
 import { FileOps } from './services/file-ops'
+import { listDir } from './services/explorer'
 import { ProjectLinks } from './services/links'
 import { MemoStore } from './services/memo'
 import { WorkspaceStore } from './services/workspace'
@@ -76,17 +77,8 @@ ipcMain.on('pty:resize', (_e, { id, cols, rows }) => ptys.resize(id, cols, rows)
 ipcMain.on('pty:kill', (_e, { id }) => ptys.kill(id))
 
 // fs
-ipcMain.handle('fs:readdir', (_e, path: string): DirEntry[] => {
-  try {
-    return readdirSync(path, { withFileTypes: true })
-      .map((d) => {
-        let isDir = d.isDirectory()
-        if (d.isSymbolicLink()) { try { isDir = statSync(join(path, d.name)).isDirectory() } catch { /* dangling */ } }
-        return { name: d.name, path: join(path, d.name), isDir, hidden: d.name.startsWith('.') }
-      })
-      .sort((a, b) => (a.isDir === b.isDir ? a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }) : a.isDir ? -1 : 1))
-  } catch { return [] }
-})
+ipcMain.handle('fs:readdir', (_e, path: string, marks: boolean): Promise<DirEntry[]> =>
+  typeof path === 'string' && isAbsolute(path) ? listDir(path, marks ? { marks, env: ptys.env(), hasSessions: (d) => claudeData.hasSessions(d) } : {}) : Promise.resolve([]))
 ipcMain.handle('fs:exists', (_e, path: string) => existsSync(path))
 const files = new FileService((path) => send('fs:changed', { path }))
 ipcMain.handle('fs:readFile', (_e, path: string) => files.read(path))

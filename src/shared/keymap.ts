@@ -22,6 +22,7 @@ export const ACTIONS: KeyAction[] = [
   { id: 'app.save', scope: 'general', label: 'Enregistrer', default: 'Mod+S' },
   { id: 'app.screenshot', scope: 'general', label: "Capture d'écran → prompt", default: 'Mod+Alt+S' },
   { id: 'app.explorer', scope: 'general', label: 'Explorateur', default: 'Mod+1', vscode: 'Mod+Shift+E' },
+  { id: 'app.revealFile', scope: 'general', label: "Révéler le fichier dans l'explorateur", default: 'Alt+F1', vscode: '' },
   { id: 'app.search', scope: 'general', label: 'Recherche', default: 'Mod+2', vscode: 'Mod+Shift+F' },
   { id: 'app.history', scope: 'general', label: 'Historique du projet', default: 'Mod+3' },
   { id: 'app.skills', scope: 'general', label: 'Skills du projet', default: 'Mod+4' },

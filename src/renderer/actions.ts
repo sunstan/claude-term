@@ -3,6 +3,7 @@ import { binding, label as keyLabel, matches, terminalSafe, type KeyEventLike } 
 import type { PluginCommand } from '@shared/plugins'
 import { usePlugins } from '@/stores/plugins'
 import { usePalette } from '@/stores/palette'
+import { useExplorer } from '@/stores/explorer'
 
 /**
  * A DOM keydown as the keymap reads it (AltGr is Ctrl+Alt on Windows / Linux: it types, it is never a shortcut).
@@ -42,6 +43,13 @@ export function runAppAction(id: string): boolean {
     case 'app.settings': st.setShowSettings(!st.showSettings); return true
     case 'app.save': st.saveCurrentFile(); return true
     case 'app.screenshot': if (!p?.root) return false; st.captureScreen(p.id); return true
+    case 'app.revealFile': {
+      const file = p?.tabs.find((t) => t.id === p.currentTabId && t.kind === 'file')?.path
+      if (!file) return false
+      if (st.leftActivity !== 'explorer') st.setLeft('explorer')
+      setTimeout(() => useExplorer.getState().revealPath(file), 0)
+      return true
+    }
     case 'app.git': if (!p?.root) return false; st.setLeft(st.leftActivity === 'claudeterm.git:git' ? null : 'claudeterm.git:git'); return true
     case 'app.commit': if (!p?.root) return false; st.setLeft('claudeterm.git:git'); setTimeout(() => (document.querySelector('.pv-footer textarea') as HTMLTextAreaElement | null)?.focus(), 150); return true
   }

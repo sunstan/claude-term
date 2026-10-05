@@ -133,6 +133,10 @@ export interface DirEntry {
   path: string
   isDir: boolean
   hidden: boolean
+  /** git ignores it (only when asked for marks) */
+  ignored?: boolean
+  /** a folder Claude Code has sessions for (only when asked for marks) */
+  sessions?: boolean
 }
 
 export interface Settings {
@@ -164,6 +168,10 @@ export interface Settings {
   rightActivity: string | null
   /** sizes (px) and collapsed flags of the workbench, by element id */
   layout: Record<string, number | boolean>
+  /** explorer: open folders by tree root */
+  explorerOpen: Record<string, string[]>
+  /** explorer: dotfiles and what git ignores are shown (dimmed) */
+  explorerShowHidden: boolean
   /** OS notifications when the tab is not visible */
   notifyOS: boolean
   dockBadge: boolean
@@ -204,6 +212,8 @@ export const DEFAULT_SETTINGS: Settings = {
   leftActivity: 'explorer',
   rightActivity: null,
   layout: {},
+  explorerOpen: {},
+  explorerShowHidden: true,
   notifyOS: true,
   dockBadge: true,
   windowsMode: 'native',
@@ -231,7 +241,8 @@ export interface CtApi {
     onExit(id: string, cb: (code: number) => void): () => void
   }
   fs: {
-    readdir(path: string): Promise<DirEntry[]>
+    /** marks: git-ignored entries and folders with Claude sessions (a git process per call) */
+    readdir(path: string, marks?: boolean): Promise<DirEntry[]>
     exists(path: string): Promise<boolean>
     /** editor: kind by content; text or image data URL */
     readFile(path: string): Promise<{ kind: 'text' | 'image' | 'other'; text?: string; dataUrl?: string; error?: string }>

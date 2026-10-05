@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useRef, useState } from 'react'
+import { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import { create } from 'zustand'
 import type { DirEntry, FileOpResult } from '@shared/ipc'
 import { Icons } from './icons'
@@ -7,6 +7,8 @@ import { useWorkbench, type Project } from '@/stores/workbench'
 import { pinFile } from '@/stores/memo'
 import { ContextMenu, type MenuItem } from './Menu'
 import { t as tr } from '@/i18n'
+import { foldersTo, useExplorer } from '@/stores/explorer'
+import { isInside as isUnder } from '@shared/claude-format'
 
 const mac = window.ct.platform === 'darwin'
 const MOD = mac ? '⌘' : 'Ctrl+'
@@ -22,6 +24,8 @@ const reload = (...dirs: string[]) => { for (const d of new Set(dirs)) reloaders
 
 type Edit = { kind: 'file' | 'folder'; dir: string } | { kind: 'rename'; path: string }
 interface TreeCtx {
+  /** dotfiles and git-ignored entries are listed */
+  showHidden: boolean
   isOpen(p: string): boolean
   setOpen(p: string, open: boolean): void
   edit: Edit | null
@@ -37,10 +41,14 @@ const Tree = createContext<TreeCtx>(null as unknown as TreeCtx)
  * Lazy directory tree bounded to `root`, refreshed on disk changes. Single click selects (sets the cwd for new
  * tabs), double click opens. Keyboard (the tree takes focus on click): ↑ ↓ move, → opens a folder / goes into it,
  * ← closes it / goes to its parent, Enter opens a file or toggles a folder, Space is Quick Look (macOS);
- * ⌘C ⌘X ⌘V copy / cut / paste, ⌘D duplicates, ⌘⌫ (Delete elsewhere) to the Trash, F2 renames.
+ * ⌘C ⌘X ⌘V copy / cut / paste, ⌘D duplicates, ⌘⌫ (Delete elsewhere) to the Trash, F2 renames. Open folders are kept
+ * by root (useExplorer); a reveal request for a path under the root opens its folders and selects it.
  */
 export function FileTree({ project, root }: { project: Project; root: string }) {
-  const [open, setOpenSet] = useState<Set<string>>(() => new Set())
+  const openList = useExplorer((s) => s.open[root])
+  const open = useMemo(() => new Set(useExplorer.getState().openOf(root)), [openList, root])
+  const showHidden = useWorkbench((s) => s.settings?.explorerShowHidden ?? true)
+  const revealReq = useExplorer((s) => s.reveal)
   const [edit, setEdit] = useState<Edit | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null)
@@ -50,10 +58,23 @@ export function FileTree({ project, root }: { project: Project; root: string }) 
   const newTab = useWorkbench((s) => s.newTab)
   const clip = useClip()
   const isOpen = (p: string) => open.has(p)
-  const setOpen = (p: string, on: boolean) => setOpenSet((s) => { const n = new Set(s); if (on) n.add(p); else n.delete(p); return n })
+  const setOpen = (p: string, on: boolean) => useExplorer.getState().setOpen(root, p, on)
   const rows = () => [...(ref.current?.querySelectorAll<HTMLElement>('.row[data-path]') ?? [])]
-  const focus = () => ref.current?.focus()
+  const focus = () => ref.current?.focus({ preventScroll: true })
   useEffect(() => { if (!error) return; const t = setTimeout(() => setError(null), 5000); return () => clearTimeout(t) }, [error])
+  // opened folders' rows arrive as each folder is read: the row is looked for a few times
+  useEffect(() => {
+    const path = revealReq?.path
+    if (!path || !isUnder(path, root)) return
+    for (const d of foldersTo(root, path)) setOpen(d, true)
+    select(project.id, path, false)
+    let tries = 0
+    const timer = setInterval(() => {
+      const row = rows().find((r) => r.dataset.path === path)
+      if (row || ++tries > 40) { clearInterval(timer); row?.scrollIntoView({ block: 'center' }); focus() }
+    }, 50)
+    return () => clearInterval(timer)
+  }, [revealReq?.n])
 
   const fail = (r: FileOpResult[]) => { const e = r.find((x) => !x.ok); setError(e && !e.ok ? e.error : null) }
   const reveal = (path: string, isDir: boolean) => { select(project.id, path, isDir); requestAnimationFrame(() => rows().find((r) => r.dataset.path === path)?.scrollIntoView({ block: 'nearest' })) }
@@ -119,6 +140,7 @@ export function FileTree({ project, root }: { project: Project; root: string }) 
     ]
     const where = entry?.path ?? root
     const general: (MenuItem | 'sep')[] = [
+      ...(entry ? [{ label: tr('Insérer le chemin dans le prompt'), icon: Icons.prompt(13), onSelect: () => useWorkbench.getState().sendPaths(project.id, [entry.path]) }, 'sep' as const] : []),
       ...(mac && entry ? [{ label: tr("Coup d'œil"), shortcut: tr('Espace'), onSelect: () => window.ct.app.quickLook(where) }] : []),
       { label: tr(mac ? 'Afficher dans le Finder' : "Afficher dans l'explorateur"), onSelect: () => window.ct.app.revealInFinder(where) },
       { label: tr('Copier le chemin'), onSelect: () => navigator.clipboard.writeText(where) },
@@ -179,7 +201,7 @@ export function FileTree({ project, root }: { project: Project; root: string }) 
     }
   }
   return (
-    <Tree.Provider value={{ isOpen, setOpen, edit, error, commit, cancel, menuFor }}>
+    <Tree.Provider value={{ showHidden, isOpen, setOpen, edit, error, commit, cancel, menuFor }}>
       <div className="tree" tabIndex={0} ref={ref} onKeyDown={onKeyDown}
         onContextMenu={(e) => { if ((e.target as HTMLElement).closest('.row')) return; e.preventDefault(); setMenu({ x: e.clientX, y: e.clientY }) }}>
         <ContextMenu at={menu} onClose={() => setMenu(null)} items={menu ? menuFor() : []} />
@@ -192,10 +214,10 @@ export function FileTree({ project, root }: { project: Project; root: string }) 
 
 function Dir({ project, path, depth }: { project: Project; path: string; depth: number }) {
   const [entries, setEntries] = useState<DirEntry[] | null>(null)
-  const { edit } = useContext(Tree)
+  const { edit, showHidden } = useContext(Tree)
   useEffect(() => {
     let live = true
-    const load = () => window.ct.fs.readdir(path).then((e) => { if (live) setEntries(e) })
+    const load = () => window.ct.fs.readdir(path, true).then((e) => { if (live) setEntries(e) })
     load()
     const own = (d: string) => { if (d === path) load() }
     reloaders.add(own)
@@ -213,7 +235,7 @@ function Dir({ project, path, depth }: { project: Project; path: string; depth: 
           <NameInput initial="" />
         </div>
       )}
-      {entries?.map((e) => (e.isDir ? <DirRow key={e.path} project={project} entry={e} depth={depth} /> : <FileRow key={e.path} project={project} entry={e} depth={depth} />))}
+      {entries?.filter((e) => showHidden || !(e.hidden || e.ignored)).map((e) => (e.isDir ? <DirRow key={e.path} project={project} entry={e} depth={depth} /> : <FileRow key={e.path} project={project} entry={e} depth={depth} />))}
     </>
   )
 }
@@ -260,7 +282,8 @@ function DirRow({ project, entry, depth }: { project: Project; entry: DirEntry; 
         title={entry.path}>
         <span className={'chev' + (open ? ' open' : '')} onClick={(e) => { e.stopPropagation(); setOpen(entry.path, !open) }}>{Icons.chevron(10)}</span>
         <FileIcon path={entry.path} isDir open={open} />
-        {renaming ? <NameInput initial={entry.name} /> : <span style={{ opacity: entry.hidden ? 0.6 : 1 }}>{entry.name}</span>}
+        {renaming ? <NameInput initial={entry.name} /> : <span className={entry.hidden || entry.ignored ? 'dim' : undefined}>{entry.name}</span>}
+        {entry.sessions && !renaming && <span className="sessions-mark" title={tr('Des sessions Claude ont été lancées dans ce dossier')}>✳</span>}
       </div>
       {open && <Dir project={project} path={entry.path} depth={depth + 1} />}
     </>
@@ -285,7 +308,7 @@ function FileRow({ project, entry, depth }: { project: Project; entry: DirEntry;
       draggable={!renaming} onDragStart={(e) => { e.dataTransfer.setData('text/plain', entry.path); e.dataTransfer.effectAllowed = 'copy' }}
       title={entry.path}>
       <FileIcon path={entry.path} />
-      {renaming ? <NameInput initial={entry.name} /> : <span style={{ opacity: entry.hidden ? 0.6 : 1 }}>{entry.name}</span>}
+      {renaming ? <NameInput initial={entry.name} /> : <span className={entry.hidden || entry.ignored ? 'dim' : undefined}>{entry.name}</span>}
     </div>
     </>
   )
