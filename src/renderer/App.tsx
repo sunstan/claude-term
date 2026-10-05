@@ -20,6 +20,7 @@ import { useUsage } from './stores/usage'
 import { usePlugins } from './stores/plugins'
 import { PluginPopover } from './workbench/PluginView'
 import { Palette } from './workbench/Palette'
+import { Decorations } from './workbench/Decorations'
 import { t } from '@/i18n'
 
 /** A tab doing something now: Claude on a turn, or a shell running a command. */
@@ -56,6 +57,19 @@ export function App() {
     window.ct.plugins.onOpenDiff((r) => { const s = useWorkbench.getState(); if (s.activeProjectId) s.openDiff(s.activeProjectId, r) })
     window.ct.plugins.onInsertPrompt((r) => { const s = useWorkbench.getState(); if (s.activeProjectId) s.insertPrompt(s.activeProjectId, r.text, { paste: true, send: r.send }) })
     window.ct.plugins.onQuery(async (q) => { if (q.kind === 'selection') window.ct.plugins.queryReply(q.id, await currentSelection()) })
+    window.ct.plugins.onOpenProject(async ({ path, claude }) => {
+      const s = useWorkbench.getState()
+      // git prints Windows paths with forward slashes
+      const root = window.ct.platform === 'win32' ? path.replace(/\//g, '\\') : path
+      // case only counts outside Windows
+      const norm = (r: string) => { const x = r.replace(/[\\/]+$/, ''); return window.ct.platform === 'win32' ? x.toLowerCase() : x }
+      const same = (r: string | null) => !!r && norm(r) === norm(root)
+      const open = s.projects.find((p) => same(p.root))
+      if (open) { s.setActiveProject(open.id); return }
+      const p = s.newProject(null)
+      s.setRoot(p.id, root)
+      if (claude) await useWorkbench.getState().newTab(p.id, 'claude', root)
+    })
     if (import.meta.env.DEV || window.ct.debug) (window as any).__ct = useWorkbench
     if (import.meta.env.DEV || window.ct.debug) (window as any).__ct_state = () => {
       const s = useWorkbench.getState()
@@ -97,6 +111,7 @@ export function App() {
           <div key={p.id} className={'ptab' + (p.id === activeProjectId ? ' on' : '') + drag.dropClass(p.id)} onClick={() => setActiveProject(p.id)} {...drag.props(p.id)}>
             <span style={{ display: 'inline-flex', color: p.id === activeProjectId ? 'var(--ct-accent)' : undefined }}>{Icons.folder(12)}</span>
             <span>{p.root ? p.root.split(/[\\/]/).filter(Boolean).pop() : t('Nouveau projet')}</span>
+            <Decorations root={p.root} />
             {p.tabs.some((t) => t.attention) && <span className="pcount attn">{p.tabs.filter((t) => t.attention).length}</span>}
             {!p.tabs.some((t) => t.attention) && p.tabs.some(activeNow) && <span className="pcount busy" title={t('En cours')}>{p.tabs.filter(activeNow).length}</span>}
             <button className="close" onClick={(e) => { e.stopPropagation(); closeProject(p.id) }} title={t('Fermer le projet')}>{Icons.x(10)}</button>
@@ -129,6 +144,20 @@ export function App() {
 /** Themed text prompt used by plugins (ctx.ui.prompt). */
 function PromptModal({ req, onDone }: { req: import('@shared/plugins').PromptRequest; onDone: (v: string | null) => void }) {
   const [value, setValue] = useState('')
+  if (req.choice) return (
+    <div className="modal-backdrop" onMouseDown={(e) => { if (e.target === e.currentTarget) onDone(null) }} onKeyDown={(e) => { if (e.key === 'Escape') { e.stopPropagation(); onDone(null) } }}>
+      <div className="modal prompt">
+        <div className="island">
+          <div className="hdr"><span>{req.title}</span></div>
+          <div className="content" style={{ padding: 12, gap: 8 }}>
+            {req.placeholder && <div className="hint">{req.placeholder}</div>}
+            {(req.options ?? []).map((o, i) => <button key={o} autoFocus={i === 0} className={'btn' + (i === 0 ? ' primary' : '')} style={{ justifyContent: 'flex-start' }} onClick={() => onDone(o)}>{o}</button>)}
+            <div className="row-actions" style={{ justifyContent: 'flex-end' }}><button className="btn" onClick={() => onDone(null)}>{t('Annuler')}</button></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
   return (
     <div className="modal-backdrop" onMouseDown={(e) => { if (e.target === e.currentTarget) onDone(null) }}>
       <div className="modal prompt">

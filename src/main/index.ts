@@ -140,7 +140,13 @@ ipcMain.handle('themes:current', () => themes.current())
 themes.onChange((t) => { send('themes:changed', t); if (win) applyOverlayTheme(win, t) })
 ipcMain.handle('settings:get', () => settings.get())
 ipcMain.handle('settings:set', (_e, patch) => settings.set(patch))
-settings.onChange((s) => send('settings:changed', s))
+let openProjectsSeen = JSON.stringify(settings.get().openProjects)
+settings.onChange((s) => {
+  send('settings:changed', s)
+  // plugins hear about projects opened and closed (workspace.onDidChangeProjects)
+  const open = JSON.stringify(s.openProjects)
+  if (open !== openProjectsSeen) { openProjectsSeen = open; pluginHost.projectsChanged() }
+})
 
 // claude sessions
 const claudeData = new ClaudeData()
@@ -229,7 +235,7 @@ ipcMain.handle('hooks:set', (_e, on: boolean) => hooks.setInstalled(on))
 // npm, links, skills, mcp, processes, search
 const ok = (fn: () => unknown) => { try { const r = fn(); return { ok: true, ...(typeof r === 'string' ? { path: r } : {}) } } catch (e) { return { ok: false, error: (e as Error).message } } }
 ipcMain.handle('links:load', (_e, root: string) => links.load(root))
-ipcMain.handle('links:save', (_e, { root, links: l }) => ok(() => links.save(root, l)))
+ipcMain.handle('links:save', (_e, { root, links: l }) => { const r = ok(() => links.save(root, l)); pluginHost.projectsChanged(); return r })
 ipcMain.handle('workspace:load', () => workspace.load())
 ipcMain.on('workspace:save', (_e, { w, scrollbacks }) => { try { workspace.save(w, scrollbacks) } catch (e) { console.error('[workspace]', e) } })
 ipcMain.on('workspace:saveNow', (e, { w, scrollbacks }) => { try { workspace.save(w, scrollbacks) } catch (err) { console.error('[workspace]', err) } e.returnValue = true })
@@ -328,7 +334,12 @@ ipcMain.handle('att:captureScreen', async () => { const p = await attachments.ca
 let activeRoot: string | null = null
 const builtinPlugins = app.isPackaged ? join(process.resourcesPath, 'plugins') : join(app.getAppPath(), 'resources', 'plugins')
 const pluginHostDir = app.isPackaged ? join(process.resourcesPath, 'plugin-host') : join(app.getAppPath(), 'resources', 'plugin-host')
-const pluginHost = new PluginHost(builtinPlugins, { send, projectRoot: () => activeRoot, settings: () => settings.get() as any }, pluginHostDir)
+const windowVisible = () => !!win && !win.isDestroyed() && win.isVisible() && !win.isMinimized()
+const pluginHost = new PluginHost(builtinPlugins, {
+  send, projectRoot: () => activeRoot, settings: () => settings.get() as any, visible: windowVisible,
+  projects: () => settings.get().openProjects.map((root) => ({ root, linked: links.load(root).map((l) => l.path) })),
+}, pluginHostDir)
+ipcMain.handle('plugins:decorations', () => pluginHost.decorations())
 ipcMain.handle('plugins:list', () => pluginHost.list())
 ipcMain.handle('plugins:viewModel', (_e, id: string) => pluginHost.viewModel(id))
 ipcMain.on('plugins:event', (_e, ev) => pluginHost.viewEvent(ev))
@@ -471,6 +482,8 @@ app.whenReady().then(() => {
   // plugin windows are hidden BrowserWindows too: closing the workbench window quits
   win.webContents.once('did-finish-load', () => { pluginStore.cleanStaging(); pluginHost.loadAll(); updater.start() })
   win.on('closed', () => { win = null; app.quit() })
+  // plugins pause their polling while the window is out of sight
+  for (const ev of ['minimize', 'restore', 'hide', 'show'] as const) win.on(ev as 'show', () => pluginHost.visibilityChanged(windowVisible()))
   // the taskbar flashing for a tab waiting (hooks.ts) stops once the window is back
   win.on('focus', () => win?.flashFrame(false))
 })

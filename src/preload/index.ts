@@ -166,6 +166,9 @@ const api: CtApi = {
     onOpenDiff: (cb) => channel('plugins:openDiff', () => true, (p) => p, cb),
     onPopover: (cb) => channel('plugins:popover', () => true, (p) => p, cb),
     onPopoverClose: (cb) => channel('plugins:popoverClose', () => true, (p) => p.id as string, cb),
+    decorations: () => ipcRenderer.invoke('plugins:decorations'),
+    onDecorations: (cb) => channel('plugins:decorations', () => true, (p) => p, cb),
+    onOpenProject: (cb) => channel('plugins:openProject', () => true, (p) => p, cb),
   },
   attachments: {
     pathForFile: (file) => webUtils.getPathForFile(file),

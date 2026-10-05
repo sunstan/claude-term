@@ -64,6 +64,31 @@ describe('plugin bootstrap (window side)', () => {
     expect(f.sent).toContainEqual(['console', ['log', ['hello', '{"a":1}']]])
   })
 
+  it('projects, visibility, decorations, opening a project or a URL', async () => {
+    const f = fakeBridge({ 'workspace.projects': [{ root: '/a', linked: ['/b'] }], 'workspace.visible': true })
+    const files = {
+      'main.js': `exports.activate = (ctx) => {
+        globalThis.__ws = { projects: ctx.workspace.projects(), visible: ctx.workspace.visible }
+        ctx.workspace.onDidChangeProjects((p) => { globalThis.__projects = p })
+        ctx.workspace.onDidChangeVisibility((v) => { globalThis.__visible = v })
+        ctx.ui.projectDecoration('/a', { text: 'main ↑1', tone: 'warn' })
+        ctx.ui.projectDecoration('/b')
+        ctx.workspace.openProject('/a.worktrees/x', { claude: true })
+        ctx.workspace.openUrl('https://github.com/x/y/pull/1')
+      }`,
+    }
+    boot(f.bridge, manifest, files)
+    await tick()
+    const g = globalThis as any
+    expect(g.__ws).toEqual({ projects: [{ root: '/a', linked: ['/b'] }], visible: true })
+    expect(f.calls.filter(([m]) => m === 'ui.projectDecoration').map(([, a]) => a)).toEqual([{ root: '/a', deco: { text: 'main ↑1', tone: 'warn' } }, { root: '/b', deco: null }])
+    expect(f.calls.find(([m]) => m === 'workspace.openProject')![1]).toEqual({ path: '/a.worktrees/x', claude: true })
+    expect(f.calls.find(([m]) => m === 'workspace.openUrl')![1]).toEqual({ url: 'https://github.com/x/y/pull/1' })
+    f.emit('projects', [{ root: '/c', linked: [] }]); f.emit('visibility', false)
+    expect(g.__projects).toEqual([{ root: '/c', linked: [] }])
+    expect(g.__visible).toBe(false)
+  })
+
   it('reports load failures and refuses requires outside the plugin', async () => {
     const run = async (files: Record<string, string>) => { const f = fakeBridge(); boot(f.bridge, manifest, files); await tick(); return f.sent.filter(([m]) => m === 'fail').map(([, a]) => a as string) }
     expect((await run({ 'main.js': 'exports.x = 1' }))[0]).toMatch(/no activate/)

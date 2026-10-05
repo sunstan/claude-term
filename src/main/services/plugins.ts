@@ -1,10 +1,11 @@
-import { app, BrowserWindow, ipcMain, session, type IpcMainEvent, type IpcMainInvokeEvent } from 'electron'
+import { app, BrowserWindow, ipcMain, session, shell, type IpcMainEvent, type IpcMainInvokeEvent } from 'electron'
 import { existsSync, mkdirSync, readdirSync, readFileSync, realpathSync, writeFileSync, statSync, watch, type FSWatcher } from 'node:fs'
 import { homedir } from 'node:os'
-import { join, dirname, relative, sep } from 'node:path'
+import { join, dirname, isAbsolute, relative, sep } from 'node:path'
 import { execFile } from 'node:child_process'
 import { missingPermissions } from '@shared/plugin-registry'
-import { cleanCommands, validateManifest, type PluginCommand, type PluginManifest, type PluginInfo, type ViewModel, type ViewEvent, type PromptRequest, type RunInfo } from '@shared/plugins'
+import { cleanCommands, validateManifest, type PluginCommand, type PluginManifest, type PluginInfo, type ViewModel, type ViewEvent, type PromptRequest, type RunInfo, type ProjectDecoration } from '@shared/plugins'
+import { isBrowsable } from '@shared/external'
 import { fsError, permissionError, type PolicyCtx } from './plugin-policy'
 
 export { validateManifest }
@@ -13,6 +14,10 @@ export interface HostBridge {
   send(channel: string, payload: unknown): void
   /** current project root of the active window, null on the welcome screen */
   projectRoot(): string | null
+  /** the open projects and their linked folders */
+  projects(): { root: string; linked: string[] }[]
+  /** the workbench window is on screen (not hidden, not minimized) */
+  visible(): boolean
   settings(): Record<string, any>
 }
 
@@ -89,7 +94,7 @@ export class PluginHost {
     const disabled = !err && (s.disabledPlugins ?? []).includes(manifest.id)
     const pending = err || builtin ? [] : missingPermissions(manifest.permissions, s.pluginPermissions?.[manifest.id])
     const info: PluginInfo = { manifest, dir, builtin, enabled: !err && !disabled && !pending.length, disabled: disabled || undefined, pendingPermissions: pending.length ? pending : undefined, error: err ?? undefined }
-    const loaded: Loaded = { info, watchers: new Map(), popovers: new Set() }
+    const loaded: Loaded = { info, watchers: new Map(), popovers: new Set(), decorations: new Map() }
     this.plugins.set(manifest.id, loaded)
     if (info.enabled) this.activate(loaded)
   }
@@ -167,6 +172,7 @@ export class PluginHost {
   private stop(p: Loaded) {
     p.watchers.forEach((w) => w.close()); p.watchers.clear()
     if (this.dynamicCommands.delete(p.info.manifest.id)) this.sendCommands()
+    if (p.decorations.size) { p.decorations.clear(); this.sendDecorations() }
     const win = p.win
     p.win = undefined
     if (!win || win.isDestroyed()) return
@@ -221,7 +227,7 @@ export class PluginHost {
       if (method === 'workspace.selection') return { value: (await this.ask('selection')) ?? { text: '', file: null, source: null } }
       if (method === 'ui.prompt') {
         const req = a as Omit<PromptRequest, 'id'>
-        return { value: await new Promise<string | null>((res) => { const id = ++this.promptSeq; this.prompts.set(id, res); this.bridge.send('plugins:prompt', { id, title: String(req.title ?? ''), placeholder: req.placeholder, options: req.options }) }) }
+        return { value: await new Promise<string | null>((res) => { const id = ++this.promptSeq; this.prompts.set(id, res); this.bridge.send('plugins:prompt', { id, title: String(req.title ?? ''), placeholder: req.placeholder, options: req.options, choice: !!req.choice }) }) }
       }
       throw new Error(`unknown method ${method}`)
     } catch (err) { return { error: String((err as Error)?.message ?? err) } }
@@ -235,6 +241,16 @@ export class PluginHost {
     switch (method) {
       case 'plugin.dir': return p.info.dir
       case 'workspace.project': return this.bridge.projectRoot()
+      case 'workspace.projects': return this.bridge.projects()
+      case 'workspace.visible': return this.bridge.visible()
+      case 'workspace.openProject': {
+        if (typeof a.path !== 'string' || !isAbsolute(a.path)) throw new Error('openProject: absolute path expected')
+        return void this.bridge.send('plugins:openProject', { path: a.path, claude: !!a.claude })
+      }
+      case 'workspace.openUrl': {
+        if (typeof a.url !== 'string' || !isBrowsable(a.url)) throw new Error('openUrl: https, or http on this machine')
+        return void shell.openExternal(a.url)
+      }
       case 'workspace.openFile': return void this.bridge.send('plugins:openFile', { path: this.checkFs(p, a.path) })
       case 'workspace.openDiff': if (a.path !== undefined) this.checkFs(p, a.path); return void this.bridge.send('plugins:openDiff', { title: String(a.title ?? ''), path: a.path, original: a.original, modified: a.modified, unified: a.unified })
       case 'fs.exists': return existsSync(this.checkFs(p, a.path))
@@ -252,6 +268,17 @@ export class PluginHost {
       }
       case 'fs.unwatch': p.watchers.get(a.wid)?.close(); p.watchers.delete(a.wid); return
       case 'ui.viewSet': { const viewId = ownView(a.viewId); this.views.set(viewId, a.model); return void this.bridge.send('plugins:view', { viewId, model: a.model }) }
+      case 'ui.projectDecoration': {
+        if (typeof a.root !== 'string' || !a.root) throw new Error('projectDecoration: root expected')
+        const d = a.deco
+        if (d == null) p.decorations.delete(a.root)
+        else {
+          if (typeof d.text !== 'string') throw new Error('projectDecoration: text expected')
+          const tone = ['ok', 'warn', 'error', 'info'].includes(d.tone) ? d.tone : undefined
+          p.decorations.set(a.root, { text: d.text.slice(0, 48), ...(tone ? { tone } : {}), ...(typeof d.tooltip === 'string' ? { tooltip: d.tooltip.slice(0, 400) } : {}) })
+        }
+        return void this.sendDecorations()
+      }
       case 'ui.notify': return void this.bridge.send('plugins:notify', { title: String(a.title ?? ''), body: a.body === undefined ? undefined : String(a.body) })
       case 'ui.popover': { const pid = `popover:${++this.popoverSeq}`; p.popovers.add(pid); this.bridge.send('plugins:popover', { id: pid, anchorViewId: ownView(a.viewId), model: a.model }); return pid }
       case 'ui.popoverUpdate': if (!p.popovers.has(a.id)) throw new Error('unknown popover'); return void this.bridge.send('plugins:popover', { id: a.id, anchorViewId: ownView(a.viewId), model: a.model })
@@ -300,6 +327,13 @@ export class PluginHost {
     for (const p of this.plugins.values()) if (e.viewId.startsWith(p.info.manifest.id + ':') || p.popovers.has(e.viewId)) this.emit(p, 'view:' + e.viewId, e)
   }
   projectChanged(root: string | null) { for (const p of this.plugins.values()) this.emit(p, 'project', root) }
+  projectsChanged() { const list = this.bridge.projects(); for (const p of this.plugins.values()) this.emit(p, 'projects', list) }
+  visibilityChanged(visible: boolean) { for (const p of this.plugins.values()) this.emit(p, 'visibility', visible) }
+  /** every plugin's decorations of project tabs and linked folders */
+  decorations(): (ProjectDecoration & { root: string; pluginId: string })[] {
+    return [...this.plugins.values()].flatMap((p) => [...p.decorations].map(([root, d]) => ({ root, pluginId: p.info.manifest.id, ...d })))
+  }
+  private sendDecorations() { this.bridge.send('plugins:decorations', this.decorations()) }
   commandEnd(info: { command: string; exit: number | null }) { for (const p of this.plugins.values()) this.emit(p, 'commandEnd', info) }
   /** commands started by plugins still running: each plugin hears about its own */
   runsChanged(list: RunInfo[]) {
@@ -310,7 +344,7 @@ export class PluginHost {
   dispose() { for (const p of this.plugins.values()) { p.watchers.forEach((w) => w.close()); if (p.win && !p.win.isDestroyed()) p.win.destroy() } }
 }
 
-interface Loaded { info: PluginInfo; win?: BrowserWindow; watchers: Map<number, FSWatcher>; popovers: Set<string> }
+interface Loaded { info: PluginInfo; win?: BrowserWindow; watchers: Map<number, FSWatcher>; popovers: Set<string>; decorations: Map<string, ProjectDecoration> }
 
 /** The plugin's .js files (posix relative path → source) handed to its window. */
 export function readPluginFiles(dir: string): Record<string, string> {

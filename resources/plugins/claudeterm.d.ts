@@ -2,7 +2,7 @@
  * ClaudeTerm plugin API. A plugin is a folder with plugin.json and main.js exporting activate(ctx) (optionally
  * deactivate()). It runs in a sandboxed browser context: no Node, no network, `require` only for its own .js files
  * (relative paths). Everything else goes through ctx, checked against the permissions of plugin.json:
- * - "process": process.exec and terminal.run
+ * - "process": process.exec, terminal.run, workspace.openProject and workspace.openUrl
  * - fs (exists / read / list / watch, openFile): the plugin folder and the open project; "fs:home" widens it to the
  *   home folder. Absolute paths only.
  * - "prompt": claude.insertPrompt
@@ -28,6 +28,16 @@ export interface Context {
     /** root folder of the active project, null on the welcome screen */
     readonly project: string | null
     onDidChangeProject(cb: (root: string | null) => void): () => void
+    /** the open projects (welcome screens left out) and the folders linked to each */
+    projects(): { root: string; linked: string[] }[]
+    onDidChangeProjects(cb: (projects: { root: string; linked: string[] }[]) => void): () => void
+    /** the workbench window is on screen: pause polling while it is not */
+    readonly visible: boolean
+    onDidChangeVisibility(cb: (visible: boolean) => void): () => void
+    /** opens a folder as a project (or brings it to the front), with a Claude tab when `claude`; requires "process" */
+    openProject(path: string, opts?: { claude?: boolean }): void
+    /** an https link, or http on this machine, in the default browser; requires "process" */
+    openUrl(url: string): void
     /** opens a file in an editor tab of the active project */
     openFile(path: string): void
     /**
@@ -47,8 +57,13 @@ export interface Context {
     /** a view declared in plugin.json (contributes.views[].id) */
     view(id: string): { set(model: ViewModel): void; onEvent(cb: (e: ViewEvent) => void): () => void }
     notify(title: string, body?: string): void
-    /** modal text input; resolves null when cancelled */
-    prompt(req: { title: string; placeholder?: string; options?: string[] }): Promise<string | null>
+    /**
+     * A short chip on the project tab of `root`, or on a linked folder with that path (null removes it). One per plugin
+     * and folder; `tone` adds a status dot.
+     */
+    projectDecoration(root: string, deco: { text: string; tone?: 'ok' | 'warn' | 'error' | 'info'; tooltip?: string } | null): void
+    /** modal text input (`choice`: the options only, as buttons); resolves null when cancelled */
+    prompt(req: { title: string; placeholder?: string; options?: string[]; choice?: boolean }): Promise<string | null>
   }
   terminal: {
     /**

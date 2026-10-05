@@ -133,7 +133,8 @@ export interface PopoverRequest { id: string; anchorViewId: string; model: ViewM
 export interface DiffRequest { title: string; path?: string; original?: string; modified?: string; unified?: string }
 
 /** Host → renderer: a text prompt (modal); answered with `plugins:promptReply`. */
-export interface PromptRequest { id: number; title: string; placeholder?: string; options?: string[] }
+/** `choice`: only the options, as buttons (no text to type) */
+export interface PromptRequest { id: number; title: string; placeholder?: string; options?: string[]; choice?: boolean }
 
 /**
  * Host → renderer: a terminal command request. `command` is typed as is; `argv` commands are quoted for the tab's
@@ -143,6 +144,9 @@ export interface RunRequest { cwd: string; command?: string; argv?: string[][]; 
 
 /** A command a plugin started in a shell tab, until it ends (shell integration): what terminal.runs() lists. */
 export interface RunInfo { id: string; tabId: string; cwd: string; command: string; label?: string; started: boolean }
+
+/** A short chip a plugin shows on a project tab or a linked folder (ui.projectDecoration). */
+export interface ProjectDecoration { text: string; tone?: 'ok' | 'warn' | 'error' | 'info'; tooltip?: string }
 
 export const FILE_COLORS: Record<string, string> = {
   ts: '#3178c6', tsx: '#3178c6', js: '#e8c547', jsx: '#e8c547', mjs: '#e8c547', json: '#e8c547', py: '#4b8bbe', md: '#8a8f9e', css: '#a074c4', scss: '#c6538c',

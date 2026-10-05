@@ -5,6 +5,7 @@ import { Island, Empty } from '../Island'
 import { FileTree } from '../FileTree'
 import { useWorkbench, type Project } from '@/stores/workbench'
 import { t } from '@/i18n'
+import { Decorations } from '../Decorations'
 
 /** Linked folders island: list with roles and read-only flag, each expandable into its own tree. */
 export function LinksIsland({ project, collapsed, onCollapse }: { project: Project; collapsed: boolean; onCollapse: (c: boolean) => void }) {
@@ -58,6 +59,7 @@ export function LinksIsland({ project, collapsed, onCollapse }: { project: Proje
                 <span className="ico">{Icons.link(13)}</span>
                 <span>{l.path.split(/[\\/]/).pop()}</span>
                 {l.role && <span className="muted" style={{ marginLeft: 4 }}>{l.role}</span>}
+                <Decorations root={l.path} />
                 {l.readOnly && <span className="badge" style={{ marginLeft: 'auto', background: 'var(--ct-hover-bg)', color: 'var(--ct-text-secondary)' }}>ro</span>}
               </div>
               {expanded === l.path && <div style={{ paddingLeft: 8 }}><FileTree project={project} root={l.path} /></div>}

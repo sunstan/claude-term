@@ -30,6 +30,12 @@
     workspace: {
       get project() { return call('workspace.project') },
       onDidChangeProject: (cb) => on('project', cb),
+      projects: () => call('workspace.projects'),
+      onDidChangeProjects: (cb) => on('projects', cb),
+      get visible() { return call('workspace.visible') },
+      onDidChangeVisibility: (cb) => on('visibility', cb),
+      openProject: (path, opts) => call('workspace.openProject', { path, claude: !!(opts && opts.claude) }),
+      openUrl: (url) => call('workspace.openUrl', { url }),
       openFile: (path) => call('workspace.openFile', { path }),
       openDiff: (req) => call('workspace.openDiff', req),
       selection: () => callAsync('workspace.selection'),
@@ -48,6 +54,7 @@
     ui: {
       view,
       notify: (title, body) => call('ui.notify', { title, body }),
+      projectDecoration: (root, deco) => call('ui.projectDecoration', { root, deco: deco || null }),
       popover: (localViewId, model) => {
         const id = call('ui.popover', { viewId: manifest.id + ':' + localViewId, model })
         return {

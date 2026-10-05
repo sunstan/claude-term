@@ -19,7 +19,8 @@ export interface PolicyCtx {
   real: (p: string) => string
 }
 
-const NEEDS: Record<string, PluginPermission> = { 'process.exec': 'process', 'terminal.run': 'process', 'terminal.stop': 'process', 'claude.insertPrompt': 'prompt' }
+// opening a project widens what fs reaches, opening a URL can carry data out: as much as running a command
+const NEEDS: Record<string, PluginPermission> = { 'process.exec': 'process', 'terminal.run': 'process', 'terminal.stop': 'process', 'workspace.openProject': 'process', 'workspace.openUrl': 'process', 'claude.insertPrompt': 'prompt' }
 
 export function permissionError(method: string, ctx: PolicyCtx): string | null {
   const need = NEEDS[method]

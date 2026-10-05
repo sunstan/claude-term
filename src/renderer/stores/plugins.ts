@@ -1,6 +1,10 @@
 import { create } from 'zustand'
 import { useWorkbench } from './workbench'
 import type { PluginInfo, ViewModel, PopoverRequest, PluginCommand } from '@shared/plugins'
+import type { PluginDecoration } from '@shared/ipc'
+
+/** a folder as compared across spellings (slashes, trailing one, case on Windows) */
+const sameRoot = (p: string) => { const s = p.replace(/\\/g, '/').replace(/\/+$/, ''); return window.ct.platform === 'win32' ? s.toLowerCase() : s }
 
 interface PluginStore {
   plugins: PluginInfo[]
@@ -18,6 +22,9 @@ interface PluginStore {
   /** tree nodes opened / closed by the user (settings.treeState): kept across tab switches and restarts */
   treeState: Record<string, Record<string, boolean>>
   setOpen(viewId: string, itemId: string, open: boolean): void
+  /** chips plugins show on project tabs and linked folders */
+  decorations: PluginDecoration[]
+  decorationsOf(root: string | null): PluginDecoration[]
 }
 
 let saveTimer: ReturnType<typeof setTimeout> | undefined
@@ -32,6 +39,12 @@ export const usePlugins = create<PluginStore>((set, get) => ({
     return get().plugins.filter((p) => p.enabled).flatMap((p) => (p.manifest.contributes?.views ?? []).filter((v) => v.placement === 'bottom').map((v) => ({ id: `${p.manifest.id}:${v.id}`, title: v.title, pluginId: p.manifest.id })))
   },
   treeState: {},
+  decorations: [],
+  decorationsOf(root) {
+    if (!root) return []
+    const want = sameRoot(root)
+    return get().decorations.filter((d) => sameRoot(d.root) === want)
+  },
   setOpen(viewId, itemId, open) {
     set((s) => {
       // bounded: the oldest choices of a view go first (item ids of closed projects pile up otherwise)
@@ -62,6 +75,8 @@ export const usePlugins = create<PluginStore>((set, get) => ({
     window.ct.plugins.onView(({ viewId, model }) => set((s) => ({ views: { ...s.views, [viewId]: model } })))
     window.ct.plugins.onPopover((r) => set((s) => ({ popovers: [...s.popovers.filter((p) => p.id !== r.id), r] })))
     window.ct.plugins.onPopoverClose((id) => set((s) => ({ popovers: s.popovers.filter((p) => p.id !== id) })))
+    window.ct.plugins.decorations().then((decorations) => set({ decorations }))
+    window.ct.plugins.onDecorations((decorations) => set({ decorations }))
   },
   activities(side) {
     return get().plugins.filter((p) => p.enabled).flatMap((p) => (p.manifest.contributes?.activity ?? []).filter((a) => a.side === side).map((a) => ({ id: `${p.manifest.id}:${a.id}`, title: a.title, icon: a.icon, pluginId: p.manifest.id })))

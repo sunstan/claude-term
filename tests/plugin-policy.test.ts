@@ -13,6 +13,12 @@ describe('plugin policy', () => {
     expect(permissionError('process.exec', ctx({ permissions: new Set(['process']) }))).toBeNull()
     expect(permissionError('process.exec', ctx({ builtin: true }))).toBeNull()
     expect(permissionError('ui.viewSet', ctx())).toBeNull()
+    // opening a project widens fs, a URL can carry data out
+    expect(permissionError('workspace.openProject', ctx())).toMatch(/"process"/)
+    expect(permissionError('workspace.openUrl', ctx())).toMatch(/"process"/)
+    expect(permissionError('workspace.openUrl', ctx({ permissions: new Set(['process']) }))).toBeNull()
+    expect(permissionError('ui.projectDecoration', ctx())).toBeNull()
+    expect(permissionError('workspace.projects', ctx())).toBeNull()
   })
 
   it('requires "prompt" to type into Claude, nothing to read the selection or set commands', () => {
