@@ -10,7 +10,10 @@ Handoff for the next session. Design: `docs/DESIGN.md`. Working rules: `CLAUDE.m
 - **Themes**: VS Code format + own tokens, one hue per theme (lightness only varies), ClaudeTerm Dark / Light,
   single selector (follow system or a theme).
 - **Terminal**: node-pty + xterm (WebGL), Claude / shell tabs, shell integration (OSC 7770 busy/exit, OSC 7 cwd),
-  claude from the login-shell PATH, WSL mode prepared.
+  claude from the login-shell PATH, WSL mode prepared. Integration for zsh / bash (rc files), PowerShell 5.1 / 7
+  (`shared/powershell.ts`: a script after the user's profile through `-EncodedCommand`, wrapping `prompt` and
+  `PSConsoleHostReadLine`; Ctrl+Shift+F12 bound to RevertLine clears the pending line) and WSL (the account's
+  zsh / bash on the same rc files, folder passed through WSLENV). Checked through ConPTY on Windows 11.
 - **Claude**: transcript tracking, session block (Plan / Activité / Fichiers with per-session diffs), hooks
   (Notification, Stop) → attention, OS notifications, dock badge; attachments (drop, ⌘V image, ⌥⌘S capture).
 - **Editor**: Monaco tabs, dirty by content, auto save on focus loss, confirm on close, reload on external change,

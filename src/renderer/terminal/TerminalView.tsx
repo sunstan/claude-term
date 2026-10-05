@@ -58,7 +58,7 @@ export function getOrCreate(tab: Tab, theme: ResolvedTheme, fontFamily: string, 
     // ⌘V / Ctrl+V with an image on the clipboard: save it and type its path instead of pasting text
     term.attachCustomKeyEventHandler((e) => {
       if (e.type === 'keydown' && (e.metaKey || e.ctrlKey) && e.key === 'v' && !e.shiftKey) {
-        window.ct.attachments.clipboardImage().then((p) => { if (p) window.ct.pty.write(id, (require_paths().pathsForPrompt)([p])) })
+        window.ct.attachments.clipboardImage().then((p) => { if (p) window.ct.pty.write(id, require_paths().pathsForPrompt([p], window.ct.platform === 'win32')) })
         return true   // text paste still goes through xterm's own handler
       }
       return true
@@ -82,14 +82,14 @@ export function getOrCreate(tab: Tab, theme: ResolvedTheme, fontFamily: string, 
           }
         }
       }
-      if (paths.length) { window.ct.pty.write(id, require_paths().pathsForPrompt(paths)); term.focus() }
+      if (paths.length) { window.ct.pty.write(id, require_paths().pathsForPrompt(paths, window.ct.platform === 'win32')); term.focus() }
     })
     term.onResize(({ cols, rows }) => window.ct.pty.resize(id, cols, rows))
     // shell integration (start/end of commands) and cwd reports
     term.parser.registerOscHandler(OSC_SHELL, (data) => { useWorkbench.getState().shellEvent(tab.id, data); return true })
     term.parser.registerOscHandler(7, (data) => {
-      const m = data.match(/^file:\/\/[^/]*(\/.*)$/)
-      if (m) useWorkbench.getState().setCwd(tab.id, decodeURIComponent(m[1]))
+      const p = require_paths().pathFromFileUri(data)
+      if (p) useWorkbench.getState().setCwd(tab.id, p)
       return true
     })
   }

@@ -232,9 +232,9 @@ export const useWorkbench = create<Workbench>((set, get) => ({
     const p = get().projects.find((x) => x.id === projectId)
     const t = p?.tabs.find((x) => x.id === (tabId ?? p.currentTabId))
     if (t?.ptyId && t.kind !== 'file' && t.alive) {
-      window.ct.pty.write(t.ptyId, pathsForPrompt(paths))
+      window.ct.pty.write(t.ptyId, pathsForPrompt(paths, window.ct.platform === 'win32'))
       ;(await import('@/terminal/TerminalView')).focusTerminal(t.id)
-    } else await get().insertPrompt(projectId, pathsForPrompt(paths))
+    } else await get().insertPrompt(projectId, pathsForPrompt(paths, window.ct.platform === 'win32'))
   },
   async runCommand(projectId, cwd, cmds, tab = 'reuse', run) {
     const p = get().projects.find((x) => x.id === projectId)

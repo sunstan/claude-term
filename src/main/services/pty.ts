@@ -1,7 +1,8 @@
 import * as pty from 'node-pty'
 import { execFileSync } from 'node:child_process'
 import { existsSync } from 'node:fs'
-import type { PtyCreate, Settings } from '@shared/ipc'
+import { OSC_SHELL, type PtyCreate, type Settings } from '@shared/ipc'
+import { powershellArgs } from '@shared/powershell'
 import { ShellIntegration } from './shell-integration'
 import { claudeInvocation, findClaude, type Invocation } from './claude-bin'
 
@@ -34,7 +35,7 @@ export class PtyService {
   }
 
   private shell(): { file: string; args: string[]; env: Record<string, string> } {
-    if (process.platform === 'win32') return { file: 'powershell.exe', args: ['-NoLogo'], env: {} }
+    if (process.platform === 'win32') return { file: 'powershell.exe', args: powershellArgs(OSC_SHELL), env: {} }
     return this.integration.shell(process.env.SHELL || '/bin/zsh')
   }
 
@@ -73,7 +74,9 @@ export class PtyService {
       ;({ file, args } = sh)
       Object.assign(env, sh.env)
       if (process.platform === 'win32' && settings.windowsMode === 'wsl') {
-        file = 'wsl.exe'; args = [...(settings.wslDistro ? ['-d', settings.wslDistro] : []), '--cd', opts.cwd]
+        const wsl = this.integration.wslShell()
+        file = 'wsl.exe'; args = [...(settings.wslDistro ? ['-d', settings.wslDistro] : []), '--cd', opts.cwd, ...wsl.args]
+        Object.assign(env, wsl.env)
       }
     }
     try {

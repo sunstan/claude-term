@@ -9,9 +9,9 @@ describe('shell command lines', () => {
     expect(dialectFor('win32', 'wsl')).toBe('posix')
   })
 
-  it('clears the pending line only where a key does it in every edit mode', () => {
+  it('clears the pending line: ^U, or the key the PowerShell integration binds (Ctrl+Shift+F12)', () => {
     expect(clearLine('posix')).toBe('\x15')
-    expect(clearLine('powershell')).toBe('')
+    expect(clearLine('powershell')).toBe('\x1b[24;6~')
   })
 
   it('quotes for POSIX shells', () => {

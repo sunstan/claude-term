@@ -2,6 +2,8 @@
  * Command lines typed into a terminal tab, per shell dialect (pure, tested). Plugins pass argv arrays; the app
  * quotes and chains them for the tab's shell: POSIX (zsh, bash, WSL) or Windows PowerShell 5.1 (native Windows).
  */
+import { PS_CLEAR_LINE } from './powershell'
+
 export type Dialect = 'posix' | 'powershell'
 
 export const dialectFor = (platform: string, windowsMode: 'native' | 'wsl'): Dialect =>
@@ -23,12 +25,11 @@ export function quoteArg(a: string, d: Dialect): string {
 }
 
 /**
- * Typed before a command to clear what the user left at the prompt. POSIX line editors take ^U. PowerShell gets
- * nothing: PSReadLine inserts ^U as a character in its default Windows mode (the command then fails), and Escape,
- * which reverts the line there, starts a chord in Emacs mode and leaves insert mode in Vi mode.
- * TODO: clear the line in PowerShell too, once a PowerShell shell integration binds a key of its own to RevertLine.
+ * Typed before a command to clear what the user left at the prompt. POSIX line editors take ^U. PSReadLine has no
+ * key that does it in every edit mode (it inserts ^U as a character in Windows mode, Escape starts a chord in Emacs
+ * mode): the PowerShell integration binds one of its own.
  */
-export const clearLine = (d: Dialect): string => (d === 'posix' ? '\x15' : '')
+export const clearLine = (d: Dialect): string => (d === 'posix' ? '\x15' : PS_CLEAR_LINE)
 
 /** A path argument for `cd` (a leading "-" or "~" must not be taken literally by the shell either way). */
 const cdTo = (cwd: string, d: Dialect) => (d === 'posix' ? `cd ${quoteArg(cwd, d)}` : `Set-Location -LiteralPath ${quoteArg(cwd, d)}`)
