@@ -98,6 +98,7 @@ input:focus { border-color: var(--ct-accent); }
 .tab .attn { position: absolute; right: -4px; top: -4px; width: 7px; height: 7px; border-radius: 4px; border: 1.5px solid var(--ct-island-bg); }
 /* Claude working on a turn (its terminal title) */
 .tab-working { animation: tab-working 1.4s ease-in-out infinite; }
+.tab .tab-rename { width: 140px; height: 18px; padding: 0 5px; font-size: 12px; }
 @keyframes tab-working { 50% { opacity: .35; } }
 .tabs .plus { width: 24px; height: 24px; display: grid; place-items: center; border-radius: 6px; color: var(--ct-text-secondary); }
 .tabs .plus:hover { background: var(--ct-hover-bg); color: var(--ct-text); }

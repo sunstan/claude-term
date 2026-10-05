@@ -32,6 +32,8 @@ export interface Tab {
   attention?: Attention | null
   /** Claude is working on a turn (the title Claude Code gives its terminal) */
   working?: boolean
+  /** a name the user gave the tab: shown instead of `title`, which keeps following the folder */
+  customTitle?: string
   // file tabs
   fileKind?: 'text' | 'image' | 'other'
   dirty?: boolean
@@ -123,6 +125,8 @@ interface Workbench {
   setCwd(tabId: string, cwd: string): void
   /** the terminal's title changed: Claude Code's says whether it is working */
   claudeTitle(tabId: string, title: string): void
+  /** the user's name for a tab; empty gives the automatic one back */
+  renameTab(tabId: string, title: string): void
 }
 
 let seq = 0
@@ -438,6 +442,7 @@ export const useWorkbench = create<Workbench>((set, get) => ({
     const cwd = tabPathShell() === 'wsl' ? windowsPathFromWsl(reported, s?.wslDistro || undefined) : reported
     patchTab(set, tabId, (t) => (t.cwd === cwd ? {} : { cwd, title: name(cwd) }))
   },
+  renameTab(tabId, title) { const v = title.trim().slice(0, 80); patchTab(set, tabId, () => ({ customTitle: v || undefined })) },
   claudeTitle(tabId, title) {
     const activity = claudeActivity(title)
     const s = get()

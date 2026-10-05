@@ -43,6 +43,8 @@ export function Center({ project }: { project: Project }) {
   const { newTab, closeTab, closeFiles, setCurrentTab, moveTab } = useWorkbench()
   const drag = useReorder('tab:' + project.id, (from, to, place) => moveTab(project.id, from, to, place))
   const [ctx, setCtx] = useState<{ x: number; y: number; tab: Tab } | null>(null)
+  const [renaming, setRenaming] = useState<string | null>(null)
+  const renameTab = useWorkbench((s) => s.renameTab)
   const setMdMode = useWorkbench((s) => s.setMdMode)
   const [splitWidth, setSplitWidth] = useStoredSize('md-split', 50)   // % of the editor area
   const fileCount = project.tabs.filter((t) => t.kind === 'file').length
@@ -55,6 +57,7 @@ export function Center({ project }: { project: Project }) {
     <div className="center">
       <ContextMenu at={ctx} onClose={() => setCtx(null)} items={ctx ? [
         { label: tr('Fermer'), shortcut: shortcutLabel('app.closeTab'), onSelect: () => closeTab(project.id, ctx.tab.id) },
+        ...(ctx.tab.kind !== 'file' && ctx.tab.kind !== 'diff' ? [{ label: tr('Renommer…'), onSelect: () => setRenaming(ctx.tab.id) }] : []),
         'sep',
         { label: tr('Fermer les autres fichiers'), disabled: fileCount < (ctx.tab.kind === 'file' ? 2 : 1), onSelect: () => closeFiles(project.id, ctx.tab.kind === 'file' ? ctx.tab.id : undefined) },
         { label: tr('Fermer tous les fichiers'), disabled: fileCount === 0, onSelect: () => closeFiles(project.id) },
@@ -64,12 +67,18 @@ export function Center({ project }: { project: Project }) {
         top={<Island grow title={
             <div className="tabs">
               {project.tabs.map((t) => (
-                <div key={t.id} {...drag.props(t.id)} className={'tab' + (t.id === project.currentTabId ? ' on' : '') + (t.dirty ? ' dirty' : '') + drag.dropClass(t.id)} onClick={() => setCurrentTab(project.id, t.id)} onContextMenu={(e) => { e.preventDefault(); setCtx({ x: e.clientX, y: e.clientY, tab: t }) }} title={t.kind === 'file' ? t.path : t.busy ? t.lastCommand : t.cwd}>
+                <div key={t.id} {...(renaming === t.id ? {} : drag.props(t.id))} className={'tab' + (t.id === project.currentTabId ? ' on' : '') + (t.dirty ? ' dirty' : '') + drag.dropClass(t.id)} onClick={() => setCurrentTab(project.id, t.id)} onContextMenu={(e) => { e.preventDefault(); setCtx({ x: e.clientX, y: e.clientY, tab: t }) }} title={t.kind === 'file' ? t.path : t.busy ? t.lastCommand : t.cwd}>
                   <span className={t.working ? 'tab-working' : undefined} style={{ color: t.kind === 'file' ? (t.changedOnDisk ? 'var(--ct-badge-warn)' : 'var(--ct-text-secondary)') : tabColor(t), display: 'inline-flex', position: 'relative' }} title={t.attention ? attentionLabel(t.attention) : t.working ? tr('Claude travaille') : undefined}>
                     {t.kind === 'diff' ? Icons.columns(12) : t.kind === 'file' ? (t.fileKind === 'image' ? Icons.image(12) : Icons.file(12)) : isClaude(t) ? Icons.claude(12) : Icons.terminal(12)}
                     {t.attention && <span className="attn" style={{ background: attentionColor(t.attention) }} />}
                   </span>
-                  <span style={{ fontStyle: t.dirty ? 'italic' : undefined }}>{t.title}</span>
+                  {renaming === t.id ? (
+                    <input className="tab-rename" autoFocus defaultValue={t.customTitle ?? t.title} spellCheck={false} onClick={(e) => e.stopPropagation()} onFocus={(e) => e.currentTarget.select()}
+                      onBlur={(e) => { if (!e.currentTarget.dataset.cancel) renameTab(t.id, e.currentTarget.value); setRenaming(null) }}
+                      onKeyDown={(e) => { e.stopPropagation(); if (e.key === 'Enter') e.currentTarget.blur(); if (e.key === 'Escape') { e.currentTarget.dataset.cancel = '1'; e.currentTarget.blur() } }} />
+                  ) : (
+                    <span style={{ fontStyle: t.dirty ? 'italic' : undefined }} onDoubleClick={t.kind !== 'file' && t.kind !== 'diff' ? (e) => { e.stopPropagation(); setRenaming(t.id) } : undefined}>{t.customTitle ?? t.title}</span>
+                  )}
                   <button className={'close' + (t.dirty ? ' dot' : '')} onClick={(e) => { e.stopPropagation(); closeTab(project.id, t.id) }} title={t.dirty ? withShortcut(tr('Modifications non enregistrées'), 'app.save') : withShortcut(tr('Fermer'), 'app.closeTab')}>
                     {t.dirty ? <span className="dirty-dot" /> : Icons.x(10)}
                   </button>
