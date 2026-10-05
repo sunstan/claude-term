@@ -2,6 +2,7 @@ import { app, clipboard, nativeImage } from 'electron'
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { execFile } from 'node:child_process'
+import { encodePowershell, SNIP_SCRIPT } from '@shared/powershell'
 
 /** Dropped, pasted or captured images become files under userData/drops; their path is typed into the prompt. */
 export class Attachments {
@@ -44,13 +45,25 @@ export class Attachments {
     }
     return null
   }
-  /** Interactive screen capture (macOS: screencapture -i). Resolves with the file, or null when cancelled. */
+  /** Interactive screen capture (macOS: screencapture -i, Windows: the Snipping Tool). Resolves with the file, or null when cancelled. */
   captureScreen(): Promise<string | null> {
+    if (process.platform === 'win32') return this.captureWindows()
     return new Promise((resolve) => {
       if (process.platform !== 'darwin') return resolve(null)
       const p = this.newPath()
       execFile('/usr/sbin/screencapture', ['-i', '-r', p], () => resolve(existsSync(p) ? p : null))
     })
+  }
+
+  private capturing: Promise<string | null> | null = null
+  /** The Snipping Tool puts its capture on the clipboard: the helper waits for the clipboard to change, then the image is saved. */
+  private captureWindows(): Promise<string | null> {
+    this.capturing ??= new Promise<string | null>((resolve) => {
+      execFile('powershell.exe', ['-NoProfile', '-NonInteractive', '-EncodedCommand', encodePowershell(SNIP_SCRIPT)], { windowsHide: true, timeout: 130_000 }, (_e, out) => {
+        resolve(String(out).includes('changed') ? this.clipboardImage() : null)
+      })
+    }).finally(() => { this.capturing = null })
+    return this.capturing
   }
   static isImage(p: string) { return /\.(png|jpe?g|gif|webp|bmp)$/i.test(p) }
   static preview(p: string) { return nativeImage.createFromPath(p) }

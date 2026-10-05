@@ -62,3 +62,26 @@ export function encodePowershell(script: string): string {
 
 /** Arguments of an integrated PowerShell: the user's profile loads first, then the script, then the prompt. */
 export const powershellArgs = (osc: number): string[] => ['-NoLogo', '-NoExit', '-EncodedCommand', encodePowershell(powershellIntegration(osc))]
+
+/**
+ * Windows capture helper: notes the clipboard's sequence number, opens the Snipping Tool (ms-screenclip:) and prints
+ * "changed" once the clipboard changes. "cancelled" when the tool's process it opened has gone for 1.5 s without a
+ * capture, "timeout" after 2 minutes. It never reads nor clears the clipboard.
+ */
+export const SNIP_SCRIPT = [
+  `$ProgressPreference = 'SilentlyContinue'`,
+  `Add-Type -Namespace CT -Name Clip -MemberDefinition '[DllImport("user32.dll")] public static extern uint GetClipboardSequenceNumber();'`,
+  `$names = 'ScreenClippingHost', 'SnippingTool'`,
+  `$before = @(Get-Process -Name $names -ErrorAction Ignore | ForEach-Object Id)`,
+  `$seq = [CT.Clip]::GetClipboardSequenceNumber()`,
+  `Start-Process 'ms-screenclip:'`,
+  `$seen = $false; $goneAt = $null; $end = [DateTime]::Now.AddMinutes(2)`,
+  `while ([DateTime]::Now -lt $end) {`,
+  `  Start-Sleep -Milliseconds 300`,
+  `  if ([CT.Clip]::GetClipboardSequenceNumber() -ne $seq) { 'changed'; exit 0 }`,
+  `  $open = @(Get-Process -Name $names -ErrorAction Ignore | Where-Object { $before -notcontains $_.Id })`,
+  `  if ($open.Count) { $seen = $true; $goneAt = $null }`,
+  `  elseif ($seen) { if (-not $goneAt) { $goneAt = [DateTime]::Now } elseif (([DateTime]::Now - $goneAt).TotalMilliseconds -gt 1500) { 'cancelled'; exit 0 } }`,
+  `}`,
+  `'timeout'`,
+].join('\r\n')

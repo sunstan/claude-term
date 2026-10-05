@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { encodePowershell, powershellArgs, powershellIntegration, PS_CLEAR_LINE } from '../src/shared/powershell'
+import { encodePowershell, powershellArgs, powershellIntegration, PS_CLEAR_LINE, SNIP_SCRIPT } from '../src/shared/powershell'
 
 describe('PowerShell integration script', () => {
   it('encodes the script as -EncodedCommand expects (base64 of UTF-16LE)', () => {
@@ -22,6 +22,15 @@ describe('PowerShell integration script', () => {
     expect(PS_CLEAR_LINE).toBe('\x1b[24;6~')   // Ctrl+Shift+F12 as a terminal sends it
     expect(s).not.toContain('`')   // no PowerShell escapes: [char] codes only
   })
+})
+
+describe.skipIf(process.platform !== 'win32')('Windows capture helper', () => {
+  it('parses, and only waits on the clipboard sequence number', async () => {
+    const { execFileSync } = await import('node:child_process')
+    const check = `$e = $null; [void][System.Management.Automation.Language.Parser]::ParseInput('${SNIP_SCRIPT.replace(/'/g, "''")}', [ref]$null, [ref]$e); $e.Count`
+    expect(execFileSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-EncodedCommand', encodePowershell(check)], { encoding: 'utf8' }).trim()).toBe('0')
+    expect(SNIP_SCRIPT).not.toMatch(/Set-Clipboard|Get-Clipboard|Clear-Clipboard/)
+  }, 30_000)
 })
 
 // a real PowerShell in a pseudo-terminal (ConPTY), as the app runs it
