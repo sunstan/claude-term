@@ -1,11 +1,20 @@
 import { useWorkbench, type LeftActivity } from '@/stores/workbench'
-import type { KeyEventLike } from '@shared/keymap'
+import { binding, label as keyLabel, type KeyEventLike } from '@shared/keymap'
+import { usePalette } from '@/stores/palette'
 
 /**
  * A DOM keydown as the keymap reads it (AltGr is Ctrl+Alt on Windows / Linux: it types, it is never a shortcut).
  * Not on macOS, where ⌥ may be reported as AltGraph and is a shortcut modifier (⌥⌘S).
  */
 export const keyEvent = (e: KeyboardEvent): KeyEventLike => ({ key: e.key, code: e.code, metaKey: e.metaKey, ctrlKey: e.ctrlKey, altKey: e.altKey, shiftKey: e.shiftKey, altGraph: window.ct.platform !== 'darwin' && !!e.getModifierState?.('AltGraph') })
+
+/** An action's shortcut as the keymap has it now (preset, overrides), for menus and tooltips; '' when unbound. */
+export function shortcutLabel(id: string): string {
+  const s = useWorkbench.getState().settings, mac = window.ct.platform === 'darwin'
+  const k = binding(id, s?.keybindings ?? {}, s?.keymapPreset, mac)
+  return k ? keyLabel(k, mac) : ''
+}
+export const withShortcut = (text: string, id: string) => { const k = shortcutLabel(id); return k ? `${text} (${k})` : text }
 
 const PANELS: Record<string, LeftActivity> = { 'app.explorer': 'explorer', 'app.search': 'search', 'app.history': 'history', 'app.skills': 'skills', 'app.mcp': 'mcp', 'app.plugins': 'plugins', 'app.run': 'run' }
 
@@ -26,7 +35,8 @@ export function runAppAction(id: string): boolean {
     }
     case 'app.newProject': st.newProject(null); return true
     case 'app.openFolder': window.ct.app.pickFolder().then((d) => { if (d) { const s = useWorkbench.getState(); const target = p && !p.root ? p : s.newProject(null); s.setRoot(target.id, d) } }); return true
-    case 'app.goToFile': if (!p?.root) return false; st.setLeft('search'); return true
+    case 'app.goToFile': usePalette.getState().open(''); return true
+    case 'app.commands': usePalette.getState().open('>'); return true
     case 'app.settings': st.setShowSettings(!st.showSettings); return true
     case 'app.save': st.saveCurrentFile(); return true
     case 'app.screenshot': if (!p?.root) return false; st.captureScreen(p.id); return true

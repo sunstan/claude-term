@@ -10,12 +10,13 @@ import { Welcome } from './workbench/Welcome'
 import { SettingsPage } from './workbench/SettingsPage'
 import { setLanguage } from './i18n'
 import { findAction } from '@shared/keymap'
-import { keyEvent, runAppAction } from './actions'
+import { keyEvent, runAppAction, withShortcut } from './actions'
 import { useUpdate } from './stores/update'
 import { watchTaskbarBadge } from './taskbar'
 import { useUsage } from './stores/usage'
 import { usePlugins } from './stores/plugins'
 import { PluginPopover } from './workbench/PluginView'
+import { Palette } from './workbench/Palette'
 import { t } from '@/i18n'
 
 export function App() {
@@ -86,10 +87,10 @@ export function App() {
             <span>{p.root ? p.root.split(/[\\/]/).filter(Boolean).pop() : t('Nouveau projet')}</span>
             {p.tabs.some((t) => t.attention) && <span className="pcount attn">{p.tabs.filter((t) => t.attention).length}</span>}
             {!p.tabs.some((t) => t.attention) && p.tabs.some((t) => t.alive && (t.busy || isClaude(t))) && <span className="pcount busy">{p.tabs.filter((t) => t.alive && (t.busy || isClaude(t))).length}</span>}
-            <button className="close" onClick={(e) => { e.stopPropagation(); closeProject(p.id) }} title={t('Fermer le projet (⇧⌘W)')}>{Icons.x(10)}</button>
+            <button className="close" onClick={(e) => { e.stopPropagation(); closeProject(p.id) }} title={t('Fermer le projet')}>{Icons.x(10)}</button>
           </div>
         ))}
-        <button className="plus" title={t('Nouveau projet (⌘N)')} onClick={() => newProject(null)} style={{ width: 24, height: 24, display: 'grid', placeItems: 'center', borderRadius: 5, color: 'var(--ct-text-secondary)' }}>{Icons.plus(12)}</button>
+        <button className="plus" title={withShortcut(t('Nouveau projet'), 'app.newProject')} onClick={() => newProject(null)} style={{ width: 24, height: 24, display: 'grid', placeItems: 'center', borderRadius: 5, color: 'var(--ct-text-secondary)' }}>{Icons.plus(12)}</button>
         </div>
       </div>
       <div className="body">
@@ -101,6 +102,7 @@ export function App() {
       </div>
       {popovers.map((p) => <PluginPopover key={p.id} id={p.id} anchorViewId={p.anchorViewId} model={p.model} onClose={() => closePopover(p.id)} />)}
       {prompt && <PromptModal req={prompt} onDone={(v) => { window.ct.plugins.promptReply(prompt.id, v); setPrompt(null) }} />}
+      <Palette />
       {showSettings && (
         <div className="modal-backdrop" onMouseDown={(e) => { if (e.target === e.currentTarget) setShowSettings(false) }}>
           <div className="modal"><SettingsPage onClose={() => setShowSettings(false)} /></div>

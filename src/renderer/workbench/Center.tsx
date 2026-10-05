@@ -8,6 +8,7 @@ import { VStack, useCollapsed } from './Split'
 import { SessionBlock } from './SessionBlock'
 import { Island } from './Island'
 import { MenuButton, ContextMenu } from './Menu'
+import { shortcutLabel, withShortcut } from '@/actions'
 import { EditorHost, ImageView, DiffHost } from '@/editor/EditorHost'
 import { MarkdownPreview } from '@/editor/MarkdownPreview'
 import { Gutter, useStoredSize } from './Split'
@@ -23,7 +24,7 @@ function TabStatus({ tab }: { tab: Tab }) {
       <span className="tstatus">
         {tab.error && <span style={{ color: 'var(--ct-badge-error)' }}>{tab.error}</span>}
         {tab.changedOnDisk && <span className="item">{badge(tr('modifié sur le disque'), 'var(--ct-badge-warn)')}<button className="linkbtn" onClick={() => reloadFile(tab.path!)}>{tr('Recharger')}</button></span>}
-        {tab.dirty && !tab.changedOnDisk && <button className="linkbtn" onClick={() => saveFile(tab.path!)}>{tr('Enregistrer (⌘S)')}</button>}
+        {tab.dirty && !tab.changedOnDisk && <button className="linkbtn" onClick={() => saveFile(tab.path!)}>{withShortcut(tr('Enregistrer'), 'app.save')}</button>}
       </span>
     )
   }
@@ -53,7 +54,7 @@ export function Center({ project }: { project: Project }) {
   return (
     <div className="center">
       <ContextMenu at={ctx} onClose={() => setCtx(null)} items={ctx ? [
-        { label: tr('Fermer'), shortcut: '⌘W', onSelect: () => closeTab(project.id, ctx.tab.id) },
+        { label: tr('Fermer'), shortcut: shortcutLabel('app.closeTab'), onSelect: () => closeTab(project.id, ctx.tab.id) },
         'sep',
         { label: tr('Fermer les autres fichiers'), disabled: fileCount < (ctx.tab.kind === 'file' ? 2 : 1), onSelect: () => closeFiles(project.id, ctx.tab.kind === 'file' ? ctx.tab.id : undefined) },
         { label: tr('Fermer tous les fichiers'), disabled: fileCount === 0, onSelect: () => closeFiles(project.id) },
@@ -69,7 +70,7 @@ export function Center({ project }: { project: Project }) {
                     {t.attention && <span className="attn" style={{ background: attentionColor(t.attention) }} />}
                   </span>
                   <span style={{ fontStyle: t.dirty ? 'italic' : undefined }}>{t.title}</span>
-                  <button className={'close' + (t.dirty ? ' dot' : '')} onClick={(e) => { e.stopPropagation(); closeTab(project.id, t.id) }} title={t.dirty ? tr('Modifications non enregistrées (⌘S)') : tr('Fermer (⌘W)')}>
+                  <button className={'close' + (t.dirty ? ' dot' : '')} onClick={(e) => { e.stopPropagation(); closeTab(project.id, t.id) }} title={t.dirty ? withShortcut(tr('Modifications non enregistrées'), 'app.save') : withShortcut(tr('Fermer'), 'app.closeTab')}>
                     {t.dirty ? <span className="dirty-dot" /> : Icons.x(10)}
                   </button>
                 </div>
@@ -78,9 +79,9 @@ export function Center({ project }: { project: Project }) {
           actions={<>
             {current?.kind === 'file' && <TabStatus tab={current} />}
             <MenuButton title={tr('Nouvel onglet')} items={[
-              { label: tr('Claude'), icon: Icons.claude(13), shortcut: '⇧⌘T', onSelect: () => newTab(project.id, 'claude') },
-              { label: tr('Shell'), icon: Icons.terminal(13), shortcut: '⌘T', onSelect: () => newTab(project.id, 'shell') },
-              ...(window.ct.platform !== 'linux' ? ['sep' as const, { label: tr("Capture d'écran → prompt"), icon: Icons.camera(13), shortcut: window.ct.platform === 'darwin' ? '⌥⌘S' : 'Ctrl+Alt+S', onSelect: () => useWorkbench.getState().captureScreen(project.id) }] : []),
+              { label: tr('Claude'), icon: Icons.claude(13), shortcut: shortcutLabel('app.newClaude'), onSelect: () => newTab(project.id, 'claude') },
+              { label: tr('Shell'), icon: Icons.terminal(13), shortcut: shortcutLabel('app.newShell'), onSelect: () => newTab(project.id, 'shell') },
+              ...(window.ct.platform !== 'linux' ? ['sep' as const, { label: tr("Capture d'écran → prompt"), icon: Icons.camera(13), shortcut: shortcutLabel('app.screenshot'), onSelect: () => useWorkbench.getState().captureScreen(project.id) }] : []),
             ]}>{Icons.plus()}</MenuButton>
           </>}>
           {current && current.kind === 'diff' ? <div className="term-wrap editor-bg"><DiffHost key={current.id} tab={current} /></div>

@@ -24,6 +24,9 @@ Handoff for the next session. Design: `docs/DESIGN.md`. Working rules: `CLAUDE.m
   replace bar (⌘F / ⌘R), side-by-side diff tabs, separate editor fonts, format on save option.
 - **Islands**: explorer + linked folders, search (Noms: file names, Contenu: ripgrep through `@vscode/ripgrep`'s per-platform package, unpacked from the asar; case / word / regex, include / exclude globs, .gitignore followed, grouped by file), project history (left) / all history (right),
   skills (project / personal / plugins), MCP (project / user), Claude processes.
+- **Command palette** (`workbench/Palette.tsx`, `shared/palette.ts`): files, `>` commands (app actions, panels, plugin panels, with
+  their shortcuts), `@` sessions (resume), `/` skills (typed into the Claude tab); Aller au fichier / Commandes (⇧⌘O, ⇧⌘A;
+  VS Code: ⌘P, ⇧⌘P). Menus and tooltips show the shortcuts the keymap has (`withShortcut`).
 - **Settings modal**: Général (language fr/en/system), Apparence, Éditeur, Raccourcis (JetBrains or VS Code preset,
   recorder, conflicts, reset), Terminal, Claude Code (`~/.claude/settings.json` form), Notifications, Windows.
 - **Shortcuts in terminals**: xterm hands the app's shortcuts over (custom key handler → window listener); on Windows /

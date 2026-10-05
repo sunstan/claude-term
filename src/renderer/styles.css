@@ -305,6 +305,21 @@ input[type=checkbox]:disabled { opacity: .4; }
 .modal-backdrop { position: fixed; inset: 0; z-index: 200; background: rgba(0,0,0,.45); display: grid; place-items: center; }
 .modal { width: min(860px, calc(100vw - 80px)); height: min(620px, calc(100vh - 80px)); display: flex; }
 .modal > .island { flex: 1; box-shadow: 0 20px 60px rgba(0,0,0,.4); }
+/* command palette: a column at the top of the window, like VS Code's quick open */
+.palette-backdrop { place-items: start center; padding-top: 64px; background: color-mix(in srgb, var(--ct-window-bg) 40%, transparent); }
+.palette { width: min(620px, calc(100vw - 80px)); max-height: min(480px, calc(100vh - 120px)); display: flex; flex-direction: column; background: var(--ct-island-bg); border: 1px solid var(--ct-island-border); border-radius: 10px; overflow: hidden; }
+.palette > input { margin: 8px; height: 30px; font-size: 13px; }
+.palette-mode { padding: 0 12px 4px; font-size: 10.5px; text-transform: uppercase; letter-spacing: .04em; }
+.palette-list { overflow: auto; padding: 0 4px 6px; }
+.palette-item { display: flex; align-items: center; gap: 8px; width: 100%; padding: 5px 8px; border-radius: 6px; font-size: 12.5px; text-align: left; white-space: nowrap; cursor: default; }
+.palette-item.sel { background: var(--ct-selection-bg); }
+.palette-item .ico { display: grid; place-items: center; width: 16px; color: var(--ct-text-secondary); flex: none; }
+.palette-item .ico.prefix { font-family: var(--ct-font-mono); font-weight: 700; color: var(--ct-accent); }
+.palette-item .label { overflow: hidden; text-overflow: ellipsis; }
+.palette-item .detail { color: var(--ct-text-tertiary); font-size: 11px; overflow: hidden; text-overflow: ellipsis; flex: 1; }
+.palette-item .hint { margin-left: auto; color: var(--ct-text-tertiary); font-size: 10.5px; font-family: var(--ct-font-mono); }
+.palette-help .palette-item:hover { background: var(--ct-hover-bg); }
+.palette-empty { padding: 10px 12px; font-size: 12px; }
 
 /* Claude Code settings form */
 .cc-bar { display: flex; align-items: center; gap: 8px; margin-bottom: 14px; font-size: 11px; }

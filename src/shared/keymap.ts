@@ -16,6 +16,7 @@ export const ACTIONS: KeyAction[] = [
   { id: 'app.newProject', scope: 'general', label: 'Nouveau projet', default: 'Mod+N', vscode: 'Mod+Shift+N' },
   { id: 'app.openFolder', scope: 'general', label: 'Ouvrir un dossier', default: 'Mod+O' },
   { id: 'app.goToFile', scope: 'general', label: 'Aller au fichier', default: 'Mod+Shift+O', vscode: 'Mod+P' },
+  { id: 'app.commands', scope: 'general', label: 'Commandes', default: 'Mod+Shift+A', vscode: 'Mod+Shift+P' },
   { id: 'app.settings', scope: 'general', label: 'Réglages', default: 'Mod+,' },
   { id: 'app.save', scope: 'general', label: 'Enregistrer', default: 'Mod+S' },
   { id: 'app.screenshot', scope: 'general', label: "Capture d'écran → prompt", default: 'Mod+Alt+S' },

@@ -4,6 +4,8 @@ import { Icons } from './icons'
 import { useWorkbench, type LeftActivity, type RightActivity } from '@/stores/workbench'
 import { usePlugins } from '@/stores/plugins'
 import { useUpdate } from '@/stores/update'
+import { binding, label as keyLabel } from '@shared/keymap'
+import { withShortcut } from '@/actions'
 
 const pluginIcon = (name: string) => { const f = (Icons as Record<string, ((s?: number) => React.ReactElement) | undefined>)[name]; return f ? f() : Icons.puzzle() }
 
@@ -22,14 +24,14 @@ function PluginEntries({ side, current, select }: { side: 'left' | 'right'; curr
 }
 import { t } from '@/i18n'
 
-const LEFT: { id: LeftActivity; title: string; icon: () => React.ReactElement }[] = [
-  { id: 'explorer', title: 'Explorateur (⌘1)', icon: () => Icons.files() },
-  { id: 'search', title: 'Recherche (⌘2)', icon: () => Icons.search() },
-  { id: 'history', title: 'Historique du projet (⌘3)', icon: () => Icons.clock() },
-  { id: 'skills', title: 'Skills du projet (⌘4)', icon: () => Icons.sparkle() },
-  { id: 'mcp', title: 'MCP (⌘5)', icon: () => Icons.plug() },
-  { id: 'plugins', title: 'Plugins (⌘6)', icon: () => Icons.puzzle() },
-  { id: 'run', title: 'Exécuteurs (⌘7)', icon: () => Icons.play() },
+const LEFT: { id: LeftActivity; title: string; action: string; icon: () => React.ReactElement }[] = [
+  { id: 'explorer', title: 'Explorateur', action: 'app.explorer', icon: () => Icons.files() },
+  { id: 'search', title: 'Recherche', action: 'app.search', icon: () => Icons.search() },
+  { id: 'history', title: 'Historique du projet', action: 'app.history', icon: () => Icons.clock() },
+  { id: 'skills', title: 'Skills du projet', action: 'app.skills', icon: () => Icons.sparkle() },
+  { id: 'mcp', title: 'MCP', action: 'app.mcp', icon: () => Icons.plug() },
+  { id: 'plugins', title: 'Plugins', action: 'app.plugins', icon: () => Icons.puzzle() },
+  { id: 'run', title: 'Exécuteurs', action: 'app.run', icon: () => Icons.play() },
 ]
 const RIGHT: { id: RightActivity; title: string; icon: () => React.ReactElement }[] = [
   { id: 'claude', title: 'Claude : usage, version, artifacts', icon: () => Icons.gauge() },
@@ -39,11 +41,14 @@ const RIGHT: { id: RightActivity; title: string; icon: () => React.ReactElement 
 ]
 
 export function LeftActivityBar() {
-  const { leftActivity, setLeft } = useWorkbench()
+  const { leftActivity, setLeft, settings } = useWorkbench()
+  const mac = window.ct.platform === 'darwin'
+  // the shortcut as the keymap has it now (preset, overrides)
+  const titled = (a: (typeof LEFT)[number]) => { const k = binding(a.action, settings?.keybindings ?? {}, settings?.keymapPreset, mac); return k ? `${t(a.title)} (${keyLabel(k, mac)})` : t(a.title) }
   return (
     <div className="activity left">
       {LEFT.map((a) => (
-        <button key={a.id} className={leftActivity === a.id ? 'on' : ''} title={t(a.title)} onClick={() => setLeft(leftActivity === a.id ? null : a.id)}>
+        <button key={a.id} className={leftActivity === a.id ? 'on' : ''} title={titled(a)} onClick={() => setLeft(leftActivity === a.id ? null : a.id)}>
           {a.icon()}
         </button>
       ))}
@@ -65,7 +70,7 @@ export function RightActivityBar() {
       <PluginEntries side="right" current={rightActivity} select={(id) => setRight(id as RightActivity | null)} />
       <span className="spacer" />
       {update.status === 'ready' && <button className="update" title={t('Version {v} prête : redémarrer pour l\'installer (les terminaux seront fermés)', { v: update.version ?? '' })} onClick={() => window.ct.update.install()}>{Icons.download()}</button>}
-      <button className={showSettings ? 'on' : ''} title={t(window.ct.platform === 'darwin' ? 'Réglages (⌘,)' : 'Réglages (Ctrl+,)')} onClick={() => setShowSettings(!showSettings)}>{Icons.gear()}</button>
+      <button className={showSettings ? 'on' : ''} title={withShortcut(t('Réglages'), 'app.settings')} onClick={() => setShowSettings(!showSettings)}>{Icons.gear()}</button>
     </div>
   )
 }
