@@ -22,6 +22,14 @@ export function quoteArg(a: string, d: Dialect): string {
   return "'" + native.replace(/['\u2018\u2019\u201A\u201B]/g, (m) => m + m) + "'"
 }
 
+/**
+ * Typed before a command to clear what the user left at the prompt. POSIX line editors take ^U. PowerShell gets
+ * nothing: PSReadLine inserts ^U as a character in its default Windows mode (the command then fails), and Escape,
+ * which reverts the line there, starts a chord in Emacs mode and leaves insert mode in Vi mode.
+ * TODO: clear the line in PowerShell too, once a PowerShell shell integration binds a key of its own to RevertLine.
+ */
+export const clearLine = (d: Dialect): string => (d === 'posix' ? '\x15' : '')
+
 /** A path argument for `cd` (a leading "-" or "~" must not be taken literally by the shell either way). */
 const cdTo = (cwd: string, d: Dialect) => (d === 'posix' ? `cd ${quoteArg(cwd, d)}` : `Set-Location -LiteralPath ${quoteArg(cwd, d)}`)
 

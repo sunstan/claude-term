@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { commandLine, dialectFor, quoteArg } from '../src/shared/shell'
+import { clearLine, commandLine, dialectFor, quoteArg } from '../src/shared/shell'
 
 describe('shell command lines', () => {
   it('picks the dialect of the tab shell', () => {
@@ -7,6 +7,11 @@ describe('shell command lines', () => {
     expect(dialectFor('linux', 'native')).toBe('posix')
     expect(dialectFor('win32', 'native')).toBe('powershell')
     expect(dialectFor('win32', 'wsl')).toBe('posix')
+  })
+
+  it('clears the pending line only where a key does it in every edit mode', () => {
+    expect(clearLine('posix')).toBe('\x15')
+    expect(clearLine('powershell')).toBe('')
   })
 
   it('quotes for POSIX shells', () => {

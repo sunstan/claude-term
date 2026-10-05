@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 import { isInteractiveClaude } from '@shared/models'
 import { reorder } from '@shared/order'
-import { commandLine, dialectFor } from '@shared/shell'
+import { clearLine, commandLine, dialectFor } from '@shared/shell'
 import { t } from '@/i18n'
 import { pathsForPrompt } from '@shared/paths'
 import type { ResolvedTheme } from '@shared/theme'
@@ -250,9 +250,10 @@ export const useWorkbench = create<Workbench>((set, get) => ({
     if (!target?.ptyId) return
     get().setCurrentTab(projectId, target.id)
     const s = get().settings
-    const line = commandLine(dialectFor(window.ct.platform, s?.windowsMode ?? 'native'), cmds, target.cwd === cwd ? undefined : cwd)
+    const dialect = dialectFor(window.ct.platform, s?.windowsMode ?? 'native')
+    const line = commandLine(dialect, cmds, target.cwd === cwd ? undefined : cwd)
     if (run) patchTab(set, target.id, () => ({ run: { id: run.id, label: run.label, started: false, at: Date.now() } }))
-    window.ct.pty.write(target.ptyId, '\x15' + line + '\r')   // ^U clears pending input
+    window.ct.pty.write(target.ptyId, clearLine(dialect) + line + '\r')
     ;(await import('@/terminal/TerminalView')).focusTerminal(target.id)
   },
   async captureScreen(projectId) {
