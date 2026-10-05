@@ -1,6 +1,6 @@
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import type { Invocation } from './claude-bin'
-import { join } from 'node:path'
+import { basename, dirname, join } from 'node:path'
 import { homedir } from 'node:os'
 import { execFile } from 'node:child_process'
 import type { MCPServer } from '@shared/ipc'
@@ -46,7 +46,7 @@ export class Mcp {
     const servers = o?.mcpServers
     if (!servers || typeof servers !== 'object') return []
     const disabled = new Set(this.disabledInProject(root))
-    return Object.keys(servers).sort().map((n) => { const s = Mcp.from(n, servers[n], scope, p); s.disabled = disabled.has(n); return s })
+    return Object.keys(servers).sort().map((n) => { const s = Mcp.from(n, servers[n], scope, p); s.disabled = disabled.has(n); s.ref = { path: p, name: n }; return s })
   }
 
   /** Adds or replaces a server in `.mcp.json`; refuses to overwrite unreadable JSON. */
@@ -73,26 +73,60 @@ export class Mcp {
   }
 
   private userConfig(): any { try { return JSON.parse(readFileSync(this.userConfigPath, 'utf8')) } catch { return {} } }
+  /** A project's entry in ~/.claude.json, whose keys are written with forward slashes on Windows. */
+  private projectEntry(root: string): any {
+    const projects = this.userConfig().projects ?? {}
+    if (projects[root]) return projects[root]
+    const want = sameRoot(root)
+    const key = Object.keys(projects).find((k) => sameRoot(k) === want)
+    return key ? projects[key] : undefined
+  }
   user(): MCPServer[] {
     const servers = this.userConfig().mcpServers ?? {}
-    return Object.keys(servers).sort().map((n) => Mcp.from(n, servers[n], 'user', this.userConfigPath))
+    return Object.keys(servers).sort().map((n) => ({ ...Mcp.from(n, servers[n], 'user', this.userConfigPath), ref: { path: this.userConfigPath, name: n } }))
   }
   local(root: string): MCPServer[] {
-    const servers = this.userConfig().projects?.[root]?.mcpServers ?? {}
-    return Object.keys(servers).sort().map((n) => Mcp.from(n, servers[n], 'local', this.userConfigPath))
+    const servers = this.projectEntry(root)?.mcpServers ?? {}
+    return Object.keys(servers).sort().map((n) => ({ ...Mcp.from(n, servers[n], 'local', this.userConfigPath), ref: { path: this.userConfigPath, root, name: n } }))
   }
   disabledInProject(root: string): string[] {
-    const d = this.userConfig().projects?.[root]?.disabledMcpjsonServers
+    const d = this.projectEntry(root)?.disabledMcpjsonServers
     return Array.isArray(d) ? d : []
   }
-  /** Servers of other projects (recent ones), to copy from. */
-  library(excluding: string | null, candidates: string[]): MCPServer[] {
-    const seen = new Set<string>(), out: MCPServer[] = []
-    for (const root of candidates) {
-      if (root === excluding) continue
-      for (const s of this.project(root)) { if (!seen.has(s.name)) { seen.add(s.name); out.push(s) } }
+  /** Every project Claude Code has seen (~/.claude.json). */
+  knownRoots(): string[] { return Object.keys(this.userConfig().projects ?? {}) }
+
+  /**
+   * Servers of other projects to copy from: their `.mcp.json` and their local servers, from `candidates` (open and
+   * recent projects first) and every project Claude Code knows. The same name with the same config is listed once;
+   * `detail` names the project.
+   */
+  library(excluding: string | null, candidates: string[]): (MCPServer & { detail: string })[] {
+    const roots = new Map<string, string>()
+    for (const r of [...candidates, ...this.knownRoots()]) { const k = sameRoot(r); if (!roots.has(k) && (!excluding || k !== sameRoot(excluding))) roots.set(k, r) }
+    const seen = new Set<string>(), out: (MCPServer & { detail: string })[] = []
+    for (const root of roots.values()) {
+      for (const s of [...this.project(root), ...this.local(root)]) {
+        const key = s.name + JSON.stringify(Mcp.toJson(s))
+        if (seen.has(key)) continue
+        seen.add(key)
+        out.push({ ...s, detail: basename(root.replace(/[\\/]+$/, '')) || root })
+      }
     }
-    return out
+    return out.sort((a, b) => a.name.localeCompare(b.name) || a.detail.localeCompare(b.detail))
+  }
+
+  /**
+   * The server a `ref` points to, as stored: in ~/.claude.json, or in the `.mcp.json` of one of `roots` (never
+   * another file).
+   */
+  find(ref: MCPServer['ref'], roots: string[]): MCPServer | null {
+    if (!ref || typeof ref.path !== 'string' || typeof ref.name !== 'string') return null
+    if (ref.path === this.userConfigPath) return (ref.root ? this.local(ref.root) : this.user()).find((s) => s.name === ref.name) ?? null
+    if (basename(ref.path) !== '.mcp.json') return null
+    const dir = sameRoot(dirname(ref.path))
+    const root = [...roots, ...this.knownRoots()].find((r) => sameRoot(r) === dir)
+    return root ? this.project(root).find((s) => s.name === ref.name) ?? null : null
   }
 
   /** `claude mcp <args>` in the project (user-scope changes and health checks). */
@@ -131,4 +165,10 @@ export class Mcp {
     if (s.transport === 'stdio') { a.push('--', s.command, ...s.args) } else a.push(s.url)
     return a
   }
+}
+
+/** A folder as compared across spellings: forward slashes, no trailing one, the drive letter's case ignored. */
+function sameRoot(p: string): string {
+  const s = p.replace(/\\/g, '/').replace(/\/+$/, '')
+  return /^[a-z]:/i.test(s) ? s[0].toLowerCase() + s.slice(1) : s
 }

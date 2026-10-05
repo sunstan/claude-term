@@ -4,6 +4,7 @@ import { Icons } from '../icons'
 import { Island, Empty } from '../Island'
 import { useWorkbench } from '@/stores/workbench'
 import { t } from '@/i18n'
+import { MASK } from '@shared/mcp-secrets'
 
 const empty = (): MCPServer => ({ name: '', transport: 'stdio', command: '', args: [], url: '', env: {}, headers: {}, scope: 'project', sourcePath: '', disabled: false })
 const summary = (s: MCPServer) => (s.transport === 'stdio' ? [s.command, ...s.args].join(' ') : s.url)
@@ -14,7 +15,7 @@ export function McpIsland({ scope, root, collapsed, onCollapse, grow }: { scope:
   const [health, setHealth] = useState<Record<string, string>>({})
   const [checking, setChecking] = useState(false)
   const [editing, setEditing] = useState<{ s: MCPServer; replacing?: string } | null>(null)
-  const [library, setLibrary] = useState<MCPServer[]>([])
+  const [library, setLibrary] = useState<(MCPServer & { detail: string })[]>([])
   const [error, setError] = useState<string | null>(null)
   const insertPrompt = useWorkbench((s) => s.insertPrompt)
   const activeProjectId = useWorkbench((s) => s.activeProjectId)
@@ -31,8 +32,7 @@ export function McpIsland({ scope, root, collapsed, onCollapse, grow }: { scope:
       const r = await window.ct.mcp.write(s, root, editing.replacing)
       if (!r.ok) { setError(r.error ?? 'erreur'); return }
     } else {
-      const args = ['add', '-s', 'user', '-t', s.transport, ...Object.entries(s.env).flatMap(([k, v]) => ['-e', `${k}=${v}`]), ...Object.entries(s.headers).flatMap(([k, v]) => ['-H', `${k}: ${v}`]), s.name, ...(s.transport === 'stdio' ? ['--', s.command, ...s.args] : [s.url])]
-      const r = await window.ct.mcp.cli(args, root)
+      const r = await window.ct.mcp.addUser(s, root)
       if (r.code !== 0) { setError(r.output.trim() || 'erreur'); return }
     }
     setEditing(null); setError(null); reload()
@@ -68,8 +68,13 @@ export function McpIsland({ scope, root, collapsed, onCollapse, grow }: { scope:
           <input placeholder={editing.s.transport === 'stdio' ? t('env : KEY=value, autre=…') : t('headers : Authorization=Bearer …')} value={Object.entries(editing.s.transport === 'stdio' ? editing.s.env : editing.s.headers).map(([k, v]) => `${k}=${v}`).join(', ')}
             onChange={(e) => { const o: Record<string, string> = {}; for (const kv of e.target.value.split(',')) { const i = kv.indexOf('='); if (i > 0) o[kv.slice(0, i).trim()] = kv.slice(i + 1).trim() } setEditing({ ...editing, s: editing.s.transport === 'stdio' ? { ...editing.s, env: o } : { ...editing.s, headers: o } }) }} />
           {scope === 'project' && !editing.replacing && library.length > 0 && (
-            <div className="plan-pick"><div className="hint">{t('Copier depuis un autre projet :')}</div>{library.map((l) => <button key={l.sourcePath + l.name} className="linkbtn" onClick={() => setEditing({ s: { ...l, scope: 'project', sourcePath: '' } })}>{l.name}</button>)}</div>
+            // the copy keeps its source (ref): main takes its masked values from there
+            <select value="" onChange={(e) => { const l = library[+e.target.value]; if (l) { const { detail: _d, ...server } = l; setEditing({ s: { ...server, scope: 'project', sourcePath: '' } }) } }}>
+              <option value="">{t('Copier depuis un autre projet…')}</option>
+              {library.map((l, i) => <option key={i} value={i}>{l.name} — {l.detail}</option>)}
+            </select>
           )}
+          {!!editing.s.secrets && <div className="hint">{t('{n} valeur(s) secrète(s) masquée(s) : laisse {mask} pour la garder, tape une nouvelle valeur pour la changer.', { n: editing.s.secrets, mask: MASK })}</div>}
           {error && <div className="error">{error}</div>}
           <div className="row-actions"><button className="btn primary" disabled={!editing.s.name.trim() || (editing.s.transport === 'stdio' ? !editing.s.command : !editing.s.url)} onClick={save}>{editing.replacing ? t('Enregistrer') : t('Ajouter')}</button><button className="btn" onClick={() => { setEditing(null); setError(null) }}>{t('Annuler')}</button></div>
         </div>

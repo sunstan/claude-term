@@ -111,6 +111,10 @@ export interface MCPServer {
   sourcePath: string
   disabled: boolean
   health?: 'unknown' | 'connected' | 'needsAuth' | 'failed'
+  /** how many values main masked (mcp-secrets: the renderer never sees them) */
+  secrets?: number
+  /** where main reads the real values back on save: a `.mcp.json`, or ~/.claude.json (user; local with `root`) */
+  ref?: { path: string; root?: string; name: string }
 }
 
 export interface ClaudeProcess {
@@ -359,8 +363,12 @@ export interface CtApi {
     linked(root: string): Promise<MCPServer[]>
     user(): Promise<MCPServer[]>
     local(root: string): Promise<MCPServer[]>
-    library(root: string | null): Promise<MCPServer[]>
+    /** servers of every other project known (open, recent, Claude Code's), to copy from; `detail`: the project */
+    library(root: string | null): Promise<(MCPServer & { detail: string })[]>
+    /** masked values (mcp-secrets) are taken back from `server.ref` */
     write(server: MCPServer, root: string, replacing?: string): Promise<{ ok: boolean; error?: string }>
+    /** `claude mcp add -s user`, masked values taken back from `server.ref` */
+    addUser(server: MCPServer, cwd: string | null): Promise<{ code: number; output: string }>
     remove(name: string, root: string): Promise<{ ok: boolean; error?: string }>
     cli(args: string[], cwd: string | null): Promise<{ code: number; output: string }>
     /** `claude mcp list` parsed: name → health */

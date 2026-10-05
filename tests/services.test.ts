@@ -157,6 +157,30 @@ describe('mcp', () => {
     expect(() => m.write(p[0], root)).toThrow(/illisible/)
     t.dispose()
   })
+
+  it("finds a project's entry whatever the slashes, copies from every known project, resolves refs to their source only", () => {
+    const t = new TempDir()
+    const a = join(t.path, 'a'), b = join(t.path, 'b'), c = join(t.path, 'c')
+    const slashed = (p: string) => p.replace(/\\/g, '/')
+    t.write('a/.mcp.json', JSON.stringify({ mcpServers: { fs: { command: 'npx', args: ['fs'] } } }))
+    t.write('b/.mcp.json', JSON.stringify({ mcpServers: { fs: { command: 'npx', args: ['fs'] }, db: { command: 'db', env: { DB_PASSWORD: 'pw' } } } }))
+    // Claude Code writes Windows keys with forward slashes; c is known only from there
+    t.write('.claude.json', JSON.stringify({ projects: { [slashed(a)]: { mcpServers: { loc: { command: 'l' } }, disabledMcpjsonServers: ['fs'] }, [slashed(c)]: {} } }))
+    t.write('c/.mcp.json', JSON.stringify({ mcpServers: { web: { type: 'http', url: 'https://x' } } }))
+    const m = new Mcp(t.path)
+    expect(m.local(a).map((s) => s.name)).toEqual(['loc'])
+    expect(m.project(a)[0].disabled).toBe(true)
+    expect(m.local(a)[0].ref).toEqual({ path: m.userConfigPath, root: a, name: 'loc' })
+    const lib = m.library(a, [b])
+    // fs is the same in a and b: once; a itself is left out but its local server is not from it either
+    expect(lib.map((s) => [s.name, s.detail])).toEqual([['db', 'b'], ['fs', 'b'], ['web', 'c']])
+    expect(m.find({ path: join(b, '.mcp.json'), name: 'db' }, [b])?.env).toEqual({ DB_PASSWORD: 'pw' })
+    expect(m.find({ path: join(c, '.mcp.json'), name: 'web' }, [])?.url).toBe('https://x')   // known to Claude Code
+    expect(m.find({ path: join(t.path, 'elsewhere', '.mcp.json'), name: 'x' }, [b])).toBeNull()
+    expect(m.find({ path: join(b, 'package.json'), name: 'db' }, [b])).toBeNull()
+    expect(m.find({ path: m.userConfigPath, root: a, name: 'loc' }, [])?.command).toBe('l')
+    t.dispose()
+  })
 })
 
 describe('search', () => {

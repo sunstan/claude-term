@@ -518,6 +518,8 @@ const EN: Record<string, string> = {
   'Annuler la copie de « {n} »': 'Undo copying “{n}”',
   'Annuler la copie de {c} éléments': 'Undo copying {c} items',
   'Dev': 'Dev',
+  'Copier depuis un autre projet…': 'Copy from another project…',
+  '{n} valeur(s) secrète(s) masquée(s) : laisse {mask} pour la garder, tape une nouvelle valeur pour la changer.': '{n} secret value(s) masked: leave {mask} to keep it, type a new value to change it.',
   'Importer un skill': 'Import a skill',
   'Importer un fichier .md…': 'Import a .md file…',
   'Importer un dossier de skill…': 'Import a skill folder…',

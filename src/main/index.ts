@@ -35,6 +35,8 @@ import { catalogueItems, type Catalogue, type RegistryEntry } from '@shared/plug
 import { PLUGIN_PERMISSIONS, type PluginPermission } from '@shared/plugins'
 import { isWebUrl, opensInDefaultApp } from '@shared/external'
 import type { DirEntry, SkillInfo } from '@shared/ipc'
+import type { MCPServer } from '@shared/ipc'
+import { maskServer, unmaskServer } from '@shared/mcp-secrets'
 
 // One packaged instance: a second one would drain the same hook spool (userData/events) and take the first one's
 // events. It leaves before any service starts. Dev runs are left out: electron-vite starts the new app before the old
@@ -269,12 +271,21 @@ ipcMain.handle('skills:import', async (_e, { root, path, pick }: { root: string 
   return ok(() => skills.importFrom(src, root))
 })
 const mcp = new Mcp(undefined, (args) => ptys.claudeCommand(args, false))
-ipcMain.handle('mcp:project', (_e, root: string) => mcp.project(root))
-ipcMain.handle('mcp:linked', (_e, root: string) => links.load(root).flatMap((l) => mcp.project(l.path, 'linked')))
-ipcMain.handle('mcp:user', () => mcp.user())
-ipcMain.handle('mcp:local', (_e, root: string) => mcp.local(root))
-ipcMain.handle('mcp:library', (_e, root: string | null) => mcp.library(root, settings.get().recentProjects))
-ipcMain.handle('mcp:write', (_e, { server, root, replacing }) => ok(() => mcp.write(server, root, replacing)))
+// secrets never reach the renderer: lists are masked, writes take the real values back from the server's source
+const masked = (list: MCPServer[]) => list.map(maskServer)
+const mcpRoots = (root: string | null) => [...(root ? [root, ...links.load(root).map((l) => l.path)] : []), ...settings.get().openProjects, ...settings.get().recentProjects]
+const unmasked = (server: MCPServer, root: string | null) => unmaskServer(server, server.ref ? mcp.find(server.ref, mcpRoots(root)) : null)
+ipcMain.handle('mcp:project', (_e, root: string) => masked(mcp.project(root)))
+ipcMain.handle('mcp:linked', (_e, root: string) => masked(links.load(root).flatMap((l) => mcp.project(l.path, 'linked'))))
+ipcMain.handle('mcp:user', () => masked(mcp.user()))
+ipcMain.handle('mcp:local', (_e, root: string) => masked(mcp.local(root)))
+ipcMain.handle('mcp:library', (_e, root: string | null) => masked(mcp.library(root, [...settings.get().openProjects, ...settings.get().recentProjects])))
+ipcMain.handle('mcp:write', (_e, { server, root, replacing }) => ok(() => mcp.write(unmasked(server, root), root, replacing)))
+ipcMain.handle('mcp:addUser', async (_e, { server, cwd }: { server: MCPServer; cwd: string | null }) => {
+  let real: MCPServer
+  try { real = unmasked(server, cwd) } catch (e) { return { code: 1, output: (e as Error).message } }
+  return mcp.cli(Mcp.addArgs(real, 'user'), cwd)
+})
 ipcMain.handle('mcp:remove', (_e, { name, root }) => ok(() => mcp.remove(name, root)))
 ipcMain.handle('mcp:cli', (_e, { args, cwd }) => mcp.cli(args, cwd))
 ipcMain.handle('mcp:health', async (_e, cwd: string | null) => {

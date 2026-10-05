@@ -89,6 +89,22 @@ Handoff for the next session. Design: `docs/DESIGN.md`. Working rules: `CLAUDE.m
   local feed (packaged 2.0.0 → 2.0.1). Settings › Général › Mises à jour; download icon in the right bar when ready.
   CI workflow `release`: every push to main → next version (last tag + 1 patch, or package.json when higher) →
   draft release → 3 platforms → published when all succeed. First release: v2.0.0.
+- **Resize handles**: a thin line on hover and while dragging, double-click resets.
+- **Explorer**: open folders kept per project (settings `explorerOpen`), reveal the shown file (Alt+F1), collapse all,
+  dotfiles and git-ignored entries hidden or dimmed (`git check-ignore` per folder read, `services/explorer.ts`), ✳ on
+  folders with Claude sessions, insert paths into the prompt. Several rows marked (Ctrl / Cmd, Shift, Ctrl+A), dragged
+  into a folder (move; Ctrl, Option on macOS: copy), OS files dropped in are copied; taken names asked once (replace
+  to the Trash, keep both, cancel); Ctrl+Z undoes the last create, rename, move or copy (`UndoLog` in main).
+- **Scripts** (Exécuter): each script in a tab of its own, reused while it lives; the dev server address read from the
+  output (`shared/dev-url.ts`: complete lines, the echoed command skipped, local hosts only) with Ouvrir dans le
+  navigateur; named groups started or stopped together (settings `runGroups`); npm groups install their dependencies;
+  `runShow` off starts scripts without leaving the current tab (the terminal is created at once, nothing is lost).
+- **Skills**: copy to the personal skills or the open project (whole folder), import a .md file or a skill folder
+  (picked or dropped; a front matter added to a plain file).
+- **MCP**: secrets (by name: token, key, password, auth…; Bearer values; secret flags and query parameters) masked in
+  every IPC reply (`shared/mcp-secrets.ts`); main takes them back from the server's source (`ref`) on save, and adds
+  user servers itself. Copy from every project Claude Code knows (~/.claude.json), not only the recent ones. Local
+  servers and disabled ones are found again on Windows (keys with forward slashes).
 - **App icon**: new logo (`build/src/logo.svg`, 800 px full bleed) placed on the macOS grid in
   `build/src/icon.svg` (824 px body, 100 px margin on 1024); `build/icon.png` / `icon.icns` generated from it.
 - **Tabs reopen at launch** (2026-10-10): Claude tabs resume their session, shells reopen in their folder with their last

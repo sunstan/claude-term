@@ -110,6 +110,7 @@ const api: CtApi = {
     local: (root) => ipcRenderer.invoke('mcp:local', root),
     library: (root) => ipcRenderer.invoke('mcp:library', root),
     write: (server, root, replacing) => ipcRenderer.invoke('mcp:write', { server, root, replacing }),
+    addUser: (server, cwd) => ipcRenderer.invoke('mcp:addUser', { server, cwd }),
     remove: (name, root) => ipcRenderer.invoke('mcp:remove', { name, root }),
     cli: (args, cwd) => ipcRenderer.invoke('mcp:cli', { args, cwd }),
     health: (cwd) => ipcRenderer.invoke('mcp:health', cwd),
