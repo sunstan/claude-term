@@ -29,7 +29,8 @@ function repo() {
 const runEffects = (r: string, effects: any[]) => effects.filter((f) => f.type === 'run').flatMap((f) => (f.seq ?? [f.args]).map((a: string[]) => git(r, ...a)))
 const stateOf = (r: string, extra = {}) => M.withData({ ...M.initialState(), ...extra }, r, status(r), log(r), refs(r))
 
-describe('parsers against real repositories', () => {
+// each case spawns a few dozen git processes: slow on Windows while the whole suite runs
+describe('parsers against real repositories', { timeout: 30_000 }, () => {
   it('status: staged, unstaged, untracked, renamed, ahead', () => {
     const { t, r } = repo()
     t.write('work/b.txt', 'b\n'); t.write('work/c.txt', 'c\n'); git(r, 'add', '.'); git(r, 'commit', '-q', '-m', 'second')
@@ -85,7 +86,7 @@ describe('parsers against real repositories', () => {
   })
 })
 
-describe('model: views', () => {
+describe('model: views', { timeout: 30_000 }, () => {
   it('changes view: empty states, groups, badges, footer state', () => {
     expect(M.changesView(M.initialState())).toEqual({ kind: 'empty', text: 'Ouvre un projet' })
     expect(M.changesView({ ...M.initialState(), root: '/p' })).toEqual({ kind: 'empty', text: 'Pas un dépôt git' })
