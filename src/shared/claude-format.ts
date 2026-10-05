@@ -48,6 +48,18 @@ export function encodeProjectPath(path: string): string {
   return path.replace(/[^a-zA-Z0-9]/g, '-')
 }
 
+/** `base` followed by `parts`, joined with the separator `base` uses (Claude Code writes Windows paths with backslashes). */
+export function joinPath(base: string, parts: string[]): string {
+  const sep = base.includes('\\') ? '\\' : '/'
+  return [base.replace(/[\\/]+$/, ''), ...parts.filter(Boolean)].join(sep)
+}
+
+/** `path` is below `dir`, whatever separator each uses; Windows paths compare without case. */
+export function isInside(path: string, dir: string): boolean {
+  const norm = (p: string) => { const s = p.replace(/\\/g, '/').replace(/\/+$/, ''); return /^[a-zA-Z]:/.test(s) ? s.toLowerCase() : s }
+  return norm(path).startsWith(norm(dir) + '/')
+}
+
 let eventSeq = 0
 
 export function oneLine(s: string): string {
@@ -85,8 +97,9 @@ export function parseTranscript(lines: string[], opts: { plansDir: string; home:
         for (const [rel, b] of Object.entries<any>(tracked)) {
           if (!b || typeof b.backupFileName !== 'string') continue
           const version = typeof b.version === 'number' ? b.version : 1
-          const parent = typeof b.realParentDir === 'string' ? b.realParentDir : opts.home + '/' + rel.replace(/\/[^/]*$/, '')
-          const abs = parent + '/' + rel.replace(/^.*\//, '')
+          const segments = rel.split(/[\\/]/)
+          const parent = typeof b.realParentDir === 'string' ? b.realParentDir : joinPath(opts.home, segments.slice(0, -1))
+          const abs = joinPath(parent, segments.slice(-1))
           const e = u.backups[abs]
           if (e && e.version <= version) continue
           u.backups[abs] = { name: b.backupFileName, version }
@@ -119,7 +132,7 @@ export function parseTranscript(lines: string[], opts: { plansDir: string; home:
             const name: string = item.name ?? '?'
             const input = item.input ?? {}
             const file: string | null = typeof input.file_path === 'string' ? input.file_path : typeof input.notebook_path === 'string' ? input.notebook_path : null
-            if (file && file.startsWith(opts.plansDir + '/')) u.planPath = file
+            if (file && isInside(file, opts.plansDir)) u.planPath = file
             if (name === 'EnterPlanMode') u.planMode = true
             if (name === 'ExitPlanMode') u.planMode = false
             const detail = file ?? input.command ?? input.pattern ?? input.description ?? input.prompt ?? input.query ?? ''

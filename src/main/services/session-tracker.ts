@@ -1,6 +1,6 @@
 import { watch, type FSWatcher, existsSync, statSync } from 'node:fs'
-import { basename } from 'node:path'
-import { parseTranscript, completeLines, isEmptyUpdate, type ToolEvent } from '@shared/claude-format'
+import { basename, join } from 'node:path'
+import { parseTranscript, completeLines, isEmptyUpdate, isInside, type ToolEvent } from '@shared/claude-format'
 import type { SessionState } from '@shared/ipc'
 import type { ClaudeData } from './claude-data'
 
@@ -37,7 +37,8 @@ export class SessionTracker {
     this.reusesTranscript = !!opts.reuse || !!opts.resume
     this.state = emptyState()
     if (opts.resume) {
-      const p = `${data.projectDir(cwd)}/${opts.resume}.jsonl`
+      // the same spelling as the transcript paths hooks report, which route attention to this tab
+      const p = join(data.projectDir(cwd), `${opts.resume}.jsonl`)
       if (existsSync(p)) this.attach(p)
     }
     this.watchDir()
@@ -82,7 +83,7 @@ export class SessionTracker {
           s.inputTokens += u.inputTokens; s.outputTokens += u.outputTokens
           if (u.model) s.model = u.model
           if (u.contextTokens !== undefined) s.contextTokens = u.contextTokens
-          for (const e of u.events) if (e.file && !e.file.startsWith(this.data.plansDir)) s.files[e.file] = (s.files[e.file] ?? 0) + 1
+          for (const e of u.events) if (e.file && !isInside(e.file, this.data.plansDir)) s.files[e.file] = (s.files[e.file] ?? 0) + 1
           for (const [p, d] of Object.entries(u.bashDiffs)) (s.bashDiffs[p] ??= []).push(...d)
           for (const [p, b] of Object.entries(u.backups)) {
             const e = s.backups[p]

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { encodeProjectPath, parseTranscript, completeLines, diffStats, unifiedDiff, firstUserText, lastAiTitle, isEmptyUpdate } from '../src/shared/claude-format'
+import { encodeProjectPath, parseTranscript, completeLines, diffStats, unifiedDiff, firstUserText, lastAiTitle, isEmptyUpdate, joinPath, isInside } from '../src/shared/claude-format'
 
 const opts = { plansDir: '/Users/j/.claude/plans', home: '/Users/j' }
 const jsonl = (objs: object[]) => objs.map((o) => JSON.stringify(o))
@@ -60,6 +60,28 @@ describe('transcript parsing', () => {
     ]), opts)
     expect(u.backups['/x/p/a.ts']).toEqual({ name: 'a@v1', version: 1 })
   })
+  it('keeps Windows backup paths as Claude Code writes them', () => {
+    const win = { plansDir: 'C:\\Users\\j\\.claude\\plans', home: 'C:\\Users\\j' }
+    const u = parseTranscript(jsonl([
+      { type: 'file-history-snapshot', snapshot: { trackedFileBackups: {
+        'docs\\PLAN.md': { backupFileName: 'p@v1', version: 1, realParentDir: 'C:\\Projets\\app\\docs' },
+        'top.md': { backupFileName: 't@v1', version: 1, realParentDir: 'C:\\' },
+        'src\\old.ts': { backupFileName: 'o@v1', version: 1 },
+      } } },
+    ]), win)
+    expect(Object.keys(u.backups).sort()).toEqual(['C:\\Projets\\app\\docs\\PLAN.md', 'C:\\Users\\j\\src\\old.ts', 'C:\\top.md'])
+  })
+  it('resolves a backup without realParentDir from the home folder', () => {
+    const u = parseTranscript(jsonl([{ type: 'file-history-snapshot', snapshot: { trackedFileBackups: { 'a.ts': { backupFileName: 'a@v1', version: 1 } } } }]), opts)
+    expect(Object.keys(u.backups)).toEqual(['/Users/j/a.ts'])
+  })
+  it('recognises plan files with either separator', () => {
+    const win = { plansDir: 'C:\\Users\\j\\.claude\\plans', home: 'C:\\Users\\j' }
+    const plan = (file: string) => parseTranscript(jsonl([{ type: 'assistant', message: { content: [{ type: 'tool_use', id: 't', name: 'Write', input: { file_path: file } }] } }]), win).planPath
+    expect(plan('C:\\Users\\j\\.claude\\plans\\x.md')).toBe('C:\\Users\\j\\.claude\\plans\\x.md')
+    expect(plan('c:/Users/j/.claude/plans/y.md')).toBe('c:/Users/j/.claude/plans/y.md')
+    expect(plan('C:\\Users\\j\\.claude\\plans-old\\z.md')).toBeUndefined()
+  })
   it('parses bash edit diffs', () => {
     const u = parseTranscript(jsonl([{ type: 'user', message: { content: 'x' }, toolUseResult: { bashEditDiff: { files: [{ filePath: '/p/f', hunks: [{ oldStart: 1, oldLines: 1, newStart: 1, newLines: 1, lines: ['-a', '+b'] }] }] } } }]), opts)
     expect(u.bashDiffs['/p/f'][0]).toBe('@@ -1,1 +1,1 @@\n-a\n+b\n')
@@ -68,6 +90,21 @@ describe('transcript parsing', () => {
   it('titles', () => {
     expect(firstUserText(jsonl([{ type: 'user', message: { content: '<local-command>' } }, { type: 'user', message: { content: 'hello\nworld' } }]))).toBe('hello world')
     expect(lastAiTitle(jsonl([{ type: 'ai-title', aiTitle: 'A' }, { type: 'ai-title', aiTitle: 'B' }]))).toBe('B')
+  })
+})
+
+describe('paths', () => {
+  it('joins with the separator of the base', () => {
+    expect(joinPath('/x/p', ['a.ts'])).toBe('/x/p/a.ts')
+    expect(joinPath('C:\\x\\', ['src', 'a.ts'])).toBe('C:\\x\\src\\a.ts')
+    expect(joinPath('/', ['a'])).toBe('/a')
+  })
+  it('tells whether a path is inside a folder', () => {
+    expect(isInside('/a/b/c', '/a/b')).toBe(true)
+    expect(isInside('/a/bc', '/a/b')).toBe(false)
+    expect(isInside('/a/b', '/a/b')).toBe(false)
+    expect(isInside('C:\\A\\b.md', 'c:/a')).toBe(true)
+    expect(isInside('/A/b', '/a')).toBe(false)
   })
 })
 
