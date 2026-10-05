@@ -34,6 +34,8 @@ const api: CtApi = {
     rename: (path, name) => ipcRenderer.invoke('fs:rename', { path, name }),
     transfer: (paths, dest, move) => ipcRenderer.invoke('fs:transfer', { paths, dest, move }),
     trash: (paths) => ipcRenderer.invoke('fs:trash', paths),
+    undoInfo: () => ipcRenderer.invoke('fs:undoInfo'),
+    undo: () => ipcRenderer.invoke('fs:undo'),
   },
   themes: {
     list: () => ipcRenderer.invoke('themes:list'),

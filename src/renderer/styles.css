@@ -621,3 +621,5 @@ input[type=checkbox]:disabled { opacity: .4; }
 .tooltip { position: fixed; z-index: 300; left: 0; top: 0; visibility: hidden; max-width: 420px; padding: 4px 8px; border-radius: 5px; background: var(--ct-island-bg); border: 1px solid var(--ct-island-border); color: var(--ct-text); font-size: 12px; line-height: 1.35; white-space: pre-line; overflow-wrap: anywhere; pointer-events: none; text-transform: none; letter-spacing: 0; font-weight: 400; }
 .tree .row .dim { opacity: .6; }
 .tree .row .sessions-mark { color: var(--ct-accent); font-size: 10px; margin-left: 2px; }
+.tree .row.drop { background: var(--ct-accent-bg); outline: 1px solid var(--ct-accent); outline-offset: -1px; }
+.tree.drop { outline: 1px solid var(--ct-accent); outline-offset: -1px; }

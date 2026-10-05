@@ -510,4 +510,11 @@ const EN: Record<string, string> = {
   "Révéler le fichier dans l'explorateur": 'Reveal the file in the explorer',
   'Cacher les fichiers masqués et ceux que git ignore': 'Hide dotfiles and what git ignores',
   'Afficher les fichiers masqués (.env, .claude…) et ceux que git ignore': 'Show dotfiles (.env, .claude…) and what git ignores',
+  'Annuler la dernière opération': 'Undo the last operation',
+  'Annuler la création de « {n} »': 'Undo creating “{n}”',
+  'Annuler le renommage de « {n} »': 'Undo renaming “{n}”',
+  'Annuler le déplacement de « {n} »': 'Undo moving “{n}”',
+  'Annuler le déplacement de {c} éléments': 'Undo moving {c} items',
+  'Annuler la copie de « {n} »': 'Undo copying “{n}”',
+  'Annuler la copie de {c} éléments': 'Undo copying {c} items',
 }

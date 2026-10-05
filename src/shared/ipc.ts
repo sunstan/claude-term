@@ -226,6 +226,9 @@ export const DEFAULT_SETTINGS: Settings = {
 }
 
 export type FileOpResult = { ok: true; path: string } | { ok: false; error: string }
+export type UndoInfo = { kind: 'create' | 'rename' | 'move' | 'copy'; count: number; name: string }
+/** what an undo changed (moved: [from, to]), also when it stopped on an error part way */
+export type UndoResult = { moved: [string, string][]; removed: string[]; dirs: string[]; error?: string }
 
 export interface CtApi {
   platform: NodeJS.Platform
@@ -257,10 +260,13 @@ export interface CtApi {
     /** never overwrite: a taken name is refused, a copy gets "name copie" */
     create(dir: string, name: string, folder: boolean): Promise<FileOpResult>
     rename(path: string, name: string): Promise<FileOpResult>
-    /** copy (or move) into the folder `dest` */
+    /** copy (or move) into the folder `dest`; taken names are asked about (replace, keep both, cancel: no result) */
     transfer(paths: string[], dest: string, move: boolean): Promise<FileOpResult[]>
     /** to the Trash after a confirmation dialog; false when cancelled */
     trash(paths: string[]): Promise<boolean>
+    /** the explorer operation the next undo reverts (create, rename, move, copy), null when none */
+    undoInfo(): Promise<UndoInfo | null>
+    undo(): Promise<UndoResult>
   }
   themes: {
     list(): Promise<ThemeSpec[]>

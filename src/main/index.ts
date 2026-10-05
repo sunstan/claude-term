@@ -12,7 +12,7 @@ import { SessionTracker } from './services/session-tracker'
 import { ClaudeSettings } from './services/claude-settings'
 import { HookHub } from './services/hooks'
 import { FileService, DirWatcher } from './services/files'
-import { FileOps } from './services/file-ops'
+import { FileOps, UndoLog, transferAll, type ConflictChoice } from './services/file-ops'
 import { listDir } from './services/explorer'
 import { ProjectLinks } from './services/links'
 import { MemoStore } from './services/memo'
@@ -91,10 +91,34 @@ ipcMain.on('fs:unwatchDir', (_e, dir: string) => dirs.unwatch(dir))
 // explorer file management; never the disk root, the home folder or one of its parents
 const safe = (p: unknown): p is string => typeof p === 'string' && isAbsolute(p) && resolve(p) === p && p !== parse(p).root
   && !homedir().startsWith(p) && p.split(/[\\/]/).filter(Boolean).length >= 2
-ipcMain.handle('fs:create', (_e, { dir, name, folder }) => (safe(dir) || dir === homedir() ? FileOps.create(dir, name, !!folder) : { ok: false, error: 'emplacement refusé' }))
-ipcMain.handle('fs:rename', (_e, { path, name }) => (safe(path) ? FileOps.rename(path, name) : { ok: false, error: 'emplacement refusé' }))
-ipcMain.handle('fs:transfer', (_e, { paths, dest, move }: { paths: string[]; dest: string; move: boolean }) =>
-  (Array.isArray(paths) && paths.every(safe) && (safe(dest) || dest === homedir()) ? paths.map((p) => FileOps.transfer(p, dest, !!move)) : [{ ok: false, error: 'emplacement refusé' }]))
+const undoLog = new UndoLog((p) => shell.trashItem(p))
+const refused = { ok: false as const, error: 'emplacement refusé' }
+ipcMain.handle('fs:create', (_e, { dir, name, folder }) => {
+  if (!safe(dir) && dir !== homedir()) return refused
+  const r = FileOps.create(dir, name, !!folder)
+  if (r.ok) undoLog.push({ kind: 'create', paths: [r.path] })
+  return r
+})
+ipcMain.handle('fs:rename', (_e, { path, name }) => {
+  if (!safe(path)) return refused
+  const r = FileOps.rename(path, name)
+  if (r.ok && r.path !== path) undoLog.push({ kind: 'rename', pairs: [[path, r.path]] })
+  return r
+})
+ipcMain.handle('fs:transfer', (_e, { paths, dest, move }: { paths: string[]; dest: string; move: boolean }) => {
+  if (!Array.isArray(paths) || !paths.every(safe) || (!safe(dest) && dest !== homedir())) return [refused]
+  const choose = async (taken: string[]): Promise<ConflictChoice> => {
+    const what = taken.length === 1 ? `« ${basename(taken[0])} » existe déjà` : `${taken.length} éléments existent déjà`
+    const r = await dialog.showMessageBox(win!, {
+      type: 'question', message: `${what} dans « ${basename(dest)} »`, detail: 'Remplacer met les éléments existants à la corbeille.',
+      buttons: ['Remplacer', 'Garder les deux', 'Annuler'], defaultId: 1, cancelId: 2,
+    })
+    return (['replace', 'keep', 'cancel'] as const)[r.response]
+  }
+  return transferAll(paths, dest, !!move, { choose, trash: (p) => shell.trashItem(p), log: undoLog })
+})
+ipcMain.handle('fs:undoInfo', () => undoLog.peek())
+ipcMain.handle('fs:undo', () => undoLog.undo())
 ipcMain.handle('fs:trash', async (_e, paths: string[]) => {
   if (!Array.isArray(paths) || !paths.length || !paths.every(safe)) return false
   const what = paths.length === 1 ? `« ${basename(paths[0])} »` : `ces ${paths.length} éléments`
