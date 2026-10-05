@@ -1,6 +1,6 @@
 import { watch, type FSWatcher, existsSync, statSync } from 'node:fs'
 import { basename, join } from 'node:path'
-import { parseTranscript, completeLines, isEmptyUpdate, isInside, type ToolEvent } from '@shared/claude-format'
+import { parseTranscript, completeLines, isEmptyUpdate, isInside, applyQueue, type ToolEvent } from '@shared/claude-format'
 import type { SessionState } from '@shared/ipc'
 import type { ClaudeData } from './claude-data'
 
@@ -58,6 +58,7 @@ export class SessionTracker {
     this.transcript = path
     this.claimed.add(path)
     this.state.sessionId = basename(path, '.jsonl')
+    this.state.transcriptPath = path
     try { this.fileWatcher = watch(path, () => this.poll()) } catch { /* poll */ }
   }
 
@@ -89,6 +90,9 @@ export class SessionTracker {
           s.inputTokens += u.inputTokens; s.outputTokens += u.outputTokens
           if (u.model) s.model = u.model
           if (u.effort) s.effort = u.effort
+          Object.assign(s.agents, u.agents)
+          if (u.queueOps.length) s.queue = applyQueue(s.queue, u.queueOps)
+          s.images += u.images
           if (u.contextTokens !== undefined) s.contextTokens = u.contextTokens
           for (const e of u.events) if (e.file && !isInside(e.file, this.data.plansDir)) s.files[e.file] = (s.files[e.file] ?? 0) + 1
           for (const [p, d] of Object.entries(u.bashDiffs)) (s.bashDiffs[p] ??= []).push(...d)
@@ -109,8 +113,35 @@ export class SessionTracker {
         }
       }
     }
+    if (this.transcript && this.pollAgents()) changed = true
     if (this.refreshPlan()) changed = true
     if (changed) this.emit(this.tabId, this.state, newEvents)
+  }
+
+  /** where each sub-agent's transcript has been read up to (by agent id) */
+  private agentReads = new Map<string, { offset: number; rest: string }>()
+  /** Files the session's sub-agents touch count in the session's files (their activity is read on demand). */
+  private pollAgents(): boolean {
+    let changed = false
+    for (const { agentId } of Object.values(this.state.agents)) {
+      const path = this.data.subagentPath(this.transcript!, agentId)
+      const r = this.agentReads.get(agentId) ?? { offset: 0, rest: '' }
+      const { chunk, offset } = this.data.readFrom(path, r.offset)
+      if (!chunk) continue
+      const { lines, rest } = completeLines(r.rest + chunk)
+      this.agentReads.set(agentId, { offset, rest })
+      const u = parseTranscript(lines, { plansDir: this.data.plansDir, home: this.data.home })
+      const s = this.state
+      for (const e of u.events) if (e.file && !isInside(e.file, this.data.plansDir)) { s.files[e.file] = (s.files[e.file] ?? 0) + 1; changed = true }
+      for (const [p, d] of Object.entries(u.bashDiffs)) { (s.bashDiffs[p] ??= []).push(...d); changed = true }
+      for (const [p, b] of Object.entries(u.backups)) {
+        const e = s.backups[p]
+        if (e && e.version <= b.version) continue
+        s.backups[p] = b; changed = true
+        if (s.files[p] === undefined) s.files[p] = 0
+      }
+    }
+    return changed
   }
 
   private watchPlan() {
@@ -151,7 +182,7 @@ export class SessionTracker {
       this.fileWatcher?.close(); this.fileWatcher = undefined
       this.claimed.delete(this.transcript)
       this.transcript = null
-      this.offset = 0; this.rest = ''
+      this.offset = 0; this.rest = ''; this.agentReads.clear()
       this.state = emptyState()
       this.planMtime = -1; this.planWatcher?.close(); this.planWatcher = undefined
     }
@@ -173,5 +204,5 @@ export class SessionTracker {
 }
 
 export function emptyState(): SessionState {
-  return { events: [], files: {}, backups: {}, bashDiffs: {}, inputTokens: 0, outputTokens: 0, planText: '', planMode: false, runningTools: [] }
+  return { events: [], files: {}, backups: {}, bashDiffs: {}, agents: {}, queue: [], images: 0, inputTokens: 0, outputTokens: 0, planText: '', planMode: false, runningTools: [] }
 }

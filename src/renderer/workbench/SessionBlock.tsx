@@ -3,7 +3,7 @@ import { marked } from 'marked'
 import DOMPurify from 'dompurify'
 import { Icons } from './icons'
 import { Island, Empty } from './Island'
-import { diffStats } from '@shared/claude-format'
+import { diffStats, type EntryDetail, type ToolEvent } from '@shared/claude-format'
 import { useWorkbench, sessionTab, type Project, type Tab } from '@/stores/workbench'
 import { usePlugins } from '@/stores/plugins'
 import { PluginViewBody } from './PluginView'
@@ -48,6 +48,7 @@ export function SessionBlock({ project, collapsed, onCollapse }: { project: Proj
       {modeBtn('plan', t('Plan'), !!session?.planMode)}
       {modeBtn('activity', t('Activité'), (session?.runningTools.length ?? 0) > 0)}
       {modeBtn('files', t('Fichiers'), false, Object.keys(session?.files ?? {}).length)}
+      {(session?.images ?? 0) > 0 && modeBtn('images', t('Images'), false, session!.images)}
       <span className="vsep" />
       {modeBtn('errors', t('Erreurs'), checking, errorCount)}
       {modeBtn('todo', t('TODO'), false, todoCount)}
@@ -61,7 +62,7 @@ export function SessionBlock({ project, collapsed, onCollapse }: { project: Proj
         <PluginViewBody model={pluginModel} wide layoutKey={mode} send={(type, extra) => window.ct.plugins.event({ viewId: mode, type, ...extra })} />
       ) : !tab || !session ? (
         <Empty>{t('Sélectionne un onglet Claude, ou tape claude dans un shell')}</Empty>
-      ) : mode === 'plan' ? <PlanView tab={tab} /> : mode === 'activity' ? <ActivityView tab={tab} /> : <FilesView tab={tab} />}
+      ) : mode === 'plan' ? <PlanView tab={tab} /> : mode === 'activity' ? <ActivityView tab={tab} /> : mode === 'images' ? <ImagesView tab={tab} /> : <FilesView tab={tab} />}
     </Island>
   )
 }
@@ -102,39 +103,117 @@ function PlanView({ tab }: { tab: Tab }) {
   )
 }
 
+const eventIcon = (kind: string) => {
+  switch (kind) {
+    case 'user': return Icons.terminal(12)
+    case 'text': return Icons.claude(12)
+    case 'Edit': case 'Write': case 'MultiEdit': case 'NotebookEdit': case 'Edit (bash)': return Icons.file(12)
+    case 'Read': return Icons.file(12)
+    case 'Bash': return Icons.terminal(12)
+    case 'Grep': case 'Glob': case 'WebSearch': return Icons.search(12)
+    case 'Agent': case 'Task': return Icons.sparkle(12)
+    default: return Icons.activity(12)
+  }
+}
+
+/** The session's activity, or one of its sub-agents' (breadcrumb back); a click shows an entry in full. */
 function ActivityView({ tab }: { tab: Tab }) {
   const s = tab.session!
-  const openFile = useWorkbench((x) => x.openFile)
-  const projectId = useWorkbench((x) => x.activeProjectId)!
-  const icon = (kind: string) => {
-    switch (kind) {
-      case 'user': return Icons.terminal(12)
-      case 'text': return Icons.claude(12)
-      case 'Edit': case 'Write': case 'MultiEdit': case 'NotebookEdit': case 'Edit (bash)': return Icons.file(12)
-      case 'Read': return Icons.file(12)
-      case 'Bash': return Icons.terminal(12)
-      case 'Grep': case 'Glob': case 'WebSearch': return Icons.search(12)
-      default: return Icons.activity(12)
-    }
-  }
+  const [drill, setDrill] = useState<{ agentId: string; description?: string } | null>(null)
+  const [sub, setSub] = useState<{ events: ToolEvent[]; agentType?: string } | null>(null)
+  // a sub-agent's activity, read again while it runs
+  useEffect(() => {
+    setSub(null)
+    if (!drill || !s.transcriptPath) return
+    let live = true
+    const load = () => window.ct.claude.subagent(s.transcriptPath!, drill.agentId).then((r) => { if (live) setSub(r) })
+    load()
+    const timer = setInterval(load, 2500)
+    return () => { live = false; clearInterval(timer) }
+  }, [drill?.agentId, s.transcriptPath])
+  useEffect(() => { setDrill(null) }, [s.sessionId])
+  const events = drill ? sub?.events ?? [] : s.events
   return (
     <div className="activity-list">
       <div className="act-bar">
-        {s.runningTools.length > 0 ? <span className="item"><span className="spin" /> {s.runningTools.map((t) => t.name).join(', ')}</span> : <span className="muted">{s.sessionId ? t('en attente') : t('en attente du transcript…')}</span>}
+        {drill ? (
+          <span className="crumbs">
+            <button className="linkbtn" onClick={() => setDrill(null)}>{t('Session')}</button>
+            <span className="muted">›</span>
+            <span className="item">{Icons.sparkle(12)} {drill.description ?? sub?.agentType ?? t('sous-agent')}</span>
+          </span>
+        ) : s.runningTools.length > 0 ? <span className="item"><span className="spin" /> {s.runningTools.map((t) => t.name).join(', ')}</span> : <span className="muted">{s.sessionId ? t('en attente') : t('en attente du transcript…')}</span>}
         <span className="spacer" />
-        <span className="muted">{s.inputTokens.toLocaleString()} ↓ {s.outputTokens.toLocaleString()} ↑</span>
+        {!drill && <span className="muted">{s.inputTokens.toLocaleString()} ↓ {s.outputTokens.toLocaleString()} ↑</span>}
       </div>
+      {!drill && s.queue.length > 0 && (
+        <div className="queue-strip" title={s.queue.join('\n\n')}>
+          <span className="badge accent">{t('En attente')} · {s.queue.length}</span>
+          <span className="queue-items">{s.queue.map((q, i) => <span key={i} className="queue-item">{q.replace(/\s+/g, ' ').slice(0, 120)}</span>)}</span>
+        </div>
+      )}
       <div className="events">
-        {s.events.length === 0 && <Empty>{t('Rien pour l\'instant')}</Empty>}
-        {s.events.map((e) => (
-          <div key={e.id} className={'event ' + (e.kind === 'user' ? 'user' : e.kind === 'text' ? 'text' : 'tool')} onDoubleClick={() => e.file && openFile(projectId, e.file)} title={e.file ?? undefined}>
-            <span className="ico">{icon(e.kind)}</span>
-            {e.kind !== 'user' && e.kind !== 'text' && <span className="kind">{e.kind}</span>}
-            <span className="detail">{e.file ? short(e.file) : e.detail}</span>
-          </div>
-        ))}
-        <EndAnchor dep={s.events.length} />
+        {events.length === 0 && <Empty>{drill && !sub ? t('Lecture du sous-agent…') : t('Rien pour l\'instant')}</Empty>}
+        {events.map((e) => <EventRow key={e.id} e={e} tab={tab} agentId={drill?.agentId} onDrill={drill ? undefined : (a) => setDrill(a)} />)}
+        <EndAnchor dep={events.length} />
       </div>
+    </div>
+  )
+}
+
+/** One activity entry: a click shows it in full (read from the transcript), a double-click opens its file. */
+function EventRow({ e, tab, agentId, onDrill }: { e: ToolEvent; tab: Tab; agentId?: string; onDrill?: (a: { agentId: string; description?: string }) => void }) {
+  const s = tab.session!
+  const openFile = useWorkbench((x) => x.openFile)
+  const projectId = useWorkbench((x) => x.activeProjectId)!
+  const [open, setOpen] = useState(false)
+  const [detail, setDetail] = useState<EntryDetail | null | undefined>(undefined)
+  useEffect(() => {
+    if (!open || detail !== undefined || !e.ref || !s.transcriptPath) return
+    window.ct.claude.entryDetail(s.transcriptPath, e.ref, agentId).then(setDetail)
+  }, [open])
+  const agent = e.toolId ? s.agents[e.toolId] : undefined
+  return (
+    <>
+      <div className={'event ' + (e.kind === 'user' ? 'user' : e.kind === 'text' ? 'text' : 'tool') + (open ? ' open' : '')} onClick={() => e.ref && setOpen(!open)} onDoubleClick={() => e.file && openFile(projectId, e.file)} title={e.file ?? undefined}>
+        <span className="ico">{eventIcon(e.kind)}</span>
+        {e.kind !== 'user' && e.kind !== 'text' && <span className="kind">{e.kind}</span>}
+        <span className="detail">{e.file ? short(e.file) : e.detail}</span>
+        {agent && onDrill && <button className="linkbtn" onClick={(ev) => { ev.stopPropagation(); onDrill({ agentId: agent.agentId, description: agent.description ?? e.detail }) }}>{t('Ouvrir le sous-agent')}</button>}
+      </div>
+      {open && <EntryDetailView detail={detail} />}
+    </>
+  )
+}
+
+function EntryDetailView({ detail }: { detail: EntryDetail | null | undefined }) {
+  const html = useMemo(() => (detail && detail.kind === 'text' ? DOMPurify.sanitize(marked.parse(detail.text, { async: false }) as string) : ''), [detail])
+  if (detail === undefined) return <div className="entry-detail muted">{t('Lecture…')}</div>
+  if (detail === null) return <div className="entry-detail muted">{t('Introuvable dans le transcript')}</div>
+  if (detail.kind !== 'tool') return detail.kind === 'text' ? <div className="entry-detail md" dangerouslySetInnerHTML={{ __html: html }} /> : <div className="entry-detail"><pre>{detail.text}</pre></div>
+  return (
+    <div className="entry-detail">
+      <div className="ed-label">{t('Entrée')}</div>
+      <pre>{detail.input}</pre>
+      <div className={'ed-label' + (detail.isError ? ' error' : '')}>{detail.isError ? t('Erreur') : t('Résultat')}</div>
+      <pre className={detail.isError ? 'error' : undefined}>{detail.output || t('(aucun résultat pour l’instant)')}</pre>
+      {detail.truncated && <div className="muted">{t('Tronqué à 100 000 caractères')}</div>}
+    </div>
+  )
+}
+
+/** The session's images (pasted, or returned by tools; sub-agents' too); a click shows one large. */
+function ImagesView({ tab }: { tab: Tab }) {
+  const s = tab.session!
+  const [images, setImages] = useState<{ url: string; time: string }[] | null>(null)
+  const [big, setBig] = useState<string | null>(null)
+  useEffect(() => { if (s.transcriptPath) window.ct.claude.images(s.transcriptPath).then(setImages) }, [s.transcriptPath, s.images])
+  if (!images) return <Empty>{t('Lecture…')}</Empty>
+  if (!images.length) return <Empty>{t('Aucune image dans cette session')}</Empty>
+  return (
+    <div className="images-grid">
+      {images.map((im, i) => <button key={i} className="thumb" title={im.time ? new Date(im.time).toLocaleString() : undefined} onClick={() => setBig(im.url)}><img src={im.url} alt="" loading="lazy" /></button>)}
+      {big && <div className="modal-backdrop" onMouseDown={() => setBig(null)}><img className="image-big" src={big} alt="" /></div>}
     </div>
   )
 }

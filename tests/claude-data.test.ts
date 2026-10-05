@@ -77,4 +77,28 @@ describe('ClaudeData', () => {
     expect(data.plans().map((p) => p.title)).toEqual(['Plan B', 'Plan A'])
     t.dispose()
   })
+
+  it('reads a sub-agent, an entry in full and the images, only under ~/.claude/projects', () => {
+    const { t, cwd, dir, data } = home()
+    const main = t.write(join(dir, 's1.jsonl'), jsonl([
+      { type: 'user', uuid: 'u1', cwd, message: { content: [{ type: 'image', source: { type: 'base64', media_type: 'image/png', data: 'AA' } }] }, timestamp: 't1' },
+    ]))
+    t.write(join(dir, 's1', 'subagents', 'agent-ab12.jsonl'), jsonl([
+      { type: 'assistant', uuid: 'x1', isSidechain: true, message: { content: [{ type: 'tool_use', id: 'k1', name: 'Grep', input: { pattern: 'foo' } }] } },
+      { type: 'user', uuid: 'x2', isSidechain: true, timestamp: 't2', message: { content: [{ type: 'tool_result', tool_use_id: 'k1', content: 'src/a.ts:3:foo' }] } },
+      { type: 'user', uuid: 'x3', isSidechain: true, timestamp: 't3', message: { content: [{ type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: 'BB' } }] } },
+    ]))
+    t.write(join(dir, 's1', 'subagents', 'agent-ab12.meta.json'), JSON.stringify({ agentType: 'Explore', description: 'cherche foo' }))
+    const sub = data.subagent(main, 'ab12')!
+    expect(sub).toMatchObject({ agentType: 'Explore', description: 'cherche foo' })
+    expect(sub.events.map((e) => [e.kind, e.ref])).toEqual([['Grep', 'x1:0']])
+    expect(data.entryDetail(main, 'x1:0', 'ab12')).toMatchObject({ kind: 'tool', name: 'Grep', output: 'src/a.ts:3:foo' })
+    expect(data.images(main).map((i) => i.url)).toEqual(['data:image/png;base64,AA', 'data:image/jpeg;base64,BB'])
+    // nothing outside the projects folder, no path in an agent id
+    const outside = t.write('elsewhere.jsonl', jsonl([{ type: 'user', uuid: 'u9', message: { content: 'secret' } }]))
+    expect(data.entryDetail(outside, 'u9')).toBeNull()
+    expect(data.images(outside)).toEqual([])
+    expect(data.subagent(main, '../../x')).toBeNull()
+    t.dispose()
+  })
 })
