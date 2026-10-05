@@ -17,6 +17,8 @@ extraResources:
     to: plugin-host
 asarUnpack:
   - "**/node_modules/node-pty/**"
+  # ripgrep runs as a program: it cannot live inside the asar
+  - "**/node_modules/@vscode/ripgrep-*/**"
 mac:
   category: public.app-category.developer-tools
   target:

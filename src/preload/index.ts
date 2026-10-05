@@ -111,6 +111,7 @@ const api: CtApi = {
   },
   search: {
     files: (root, query) => ipcRenderer.invoke('search:files', { root, query }),
+    content: (root, query) => ipcRenderer.invoke('search:content', { root, query }),
   },
   plugins: {
     list: () => ipcRenderer.invoke('plugins:list'),

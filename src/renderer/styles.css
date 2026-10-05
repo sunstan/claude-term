@@ -267,6 +267,18 @@ input[type=checkbox]:disabled { opacity: .4; }
 .search { padding: 8px 10px 4px; }
 .search input { width: 100%; }
 .results { padding: 4px 0; }
+.panel-tabs-body > .results { flex: 1; min-height: 0; overflow: auto; }
+.content-search { display: flex; flex-direction: column; gap: 4px; }
+.content-search .fb-row input { flex: 1; width: auto; min-width: 0; font-family: inherit; }
+.content-search input.bad { border-color: var(--ct-badge-error); }
+.content-search .fb-btn.on { background: var(--ct-accent-bg); color: var(--ct-accent); }
+.cs-summary { font-size: 11px; padding: 2px 2px 0; }
+.cs-file .chev { display: grid; place-items: center; width: 12px; color: var(--ct-text-tertiary); }
+.cs-file .cs-count { font-size: 10px; font-weight: 700; padding: 0 5px; border-radius: 7px; line-height: 14px; background: var(--ct-hover-bg); color: var(--ct-text-secondary); }
+.cs-line { padding-left: 30px; font-family: var(--ct-font-mono); font-size: 11px; }
+.cs-line .cs-ln { min-width: 28px; text-align: right; color: var(--ct-text-tertiary); flex: none; }
+.cs-line .cs-text { overflow: hidden; text-overflow: ellipsis; }
+.cs-line mark { background: color-mix(in srgb, var(--ct-accent) 30%, transparent); color: inherit; border-radius: 2px; }
 .links-editor { padding: 8px 10px; border-bottom: 1px solid var(--ct-island-border); display: flex; flex-direction: column; gap: 8px; }
 .links-editor .hint { color: var(--ct-text-secondary); font-size: 11px; }
 .link-edit { display: grid; grid-template-columns: 1fr; gap: 4px; }

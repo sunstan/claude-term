@@ -22,7 +22,7 @@ Handoff for the next session. Design: `docs/DESIGN.md`. Working rules: `CLAUDE.m
 - **Editor**: Monaco tabs, dirty by content, auto save on focus loss, confirm on close, reload on external change,
   images, markdown code / split / preview (floating switch, moves under the find bar), JetBrains-like find /
   replace bar (⌘F / ⌘R), side-by-side diff tabs, separate editor fonts, format on save option.
-- **Islands**: explorer + linked folders, search (file names), project history (left) / all history (right),
+- **Islands**: explorer + linked folders, search (Noms: file names, Contenu: ripgrep through `@vscode/ripgrep`'s per-platform package, unpacked from the asar; case / word / regex, include / exclude globs, .gitignore followed, grouped by file), project history (left) / all history (right),
   skills (project / personal / plugins), MCP (project / user), Claude processes.
 - **Settings modal**: Général (language fr/en/system), Apparence, Éditeur, Raccourcis (JetBrains or VS Code preset,
   recorder, conflicts, reset), Terminal, Claude Code (`~/.claude/settings.json` form), Notifications, Windows.
@@ -97,7 +97,7 @@ Handoff for the next session. Design: `docs/DESIGN.md`. Working rules: `CLAUDE.m
    `secrets` permissions for the Linear plugin.
 4. Windows: test on a real machine (native and WSL), `hook.cmd`, screen capture, Ctrl shortcuts typed in a
    terminal go to the shell instead of the app.
-5. Formatter beyond Monaco's languages (Prettier); content search (rg) in the search island.
+5. Formatter beyond Monaco's languages (Prettier).
 6. Windows and Linux updates are untested on real machines (electron-updater, unsigned NSIS / AppImage).
 
 ## Gotchas

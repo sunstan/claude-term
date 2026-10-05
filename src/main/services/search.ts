@@ -1,5 +1,46 @@
 import { readdirSync } from 'node:fs'
 import { join, relative, sep } from 'node:path'
+import { spawn, type ChildProcess } from 'node:child_process'
+import { RgReader, rgArgs, type ContentQuery, type ContentResult } from '@shared/search'
+
+/** The platform's ripgrep from @vscode/ripgrep's optional packages; unpacked from the asar when packaged. */
+export function rgPath(): string | null {
+  const bin = `@vscode/ripgrep-${process.platform}-${process.arch}/bin/${process.platform === 'win32' ? 'rg.exe' : 'rg'}`
+  try { return require.resolve(bin).replace(/app\.asar([\\/])/, 'app.asar.unpacked$1') } catch { return null }
+}
+
+/** Content search in a project folder; a new search stops the one still running. */
+export class ContentSearch {
+  private current: ChildProcess | null = null
+
+  run(root: string, q: ContentQuery): Promise<ContentResult> {
+    this.current?.kill()
+    const reader = new RgReader()
+    const rg = rgPath()
+    if (!q.query) return Promise.resolve(reader.result())
+    if (!rg) return Promise.resolve(reader.result('ripgrep introuvable'))
+    return new Promise((resolve) => {
+      const p = spawn(rg, rgArgs(q), { cwd: root, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] })
+      this.current = p
+      let rest = '', err = ''
+      p.stdout!.setEncoding('utf8').on('data', (chunk: string) => {
+        const lines = (rest + chunk).split('\n')
+        rest = lines.pop() ?? ''
+        for (const l of lines) reader.line(l)
+        if (reader.full) p.kill()
+      })
+      p.stderr!.setEncoding('utf8').on('data', (c: string) => { err += c })
+      p.on('error', (e) => resolve(reader.result(String(e.message))))
+      p.on('close', (code) => {
+        if (this.current === p) this.current = null
+        reader.line(rest)
+        // 1: nothing found; 2: some files unreadable, results kept unless the pattern itself is wrong
+        const bad = code === 2 && !reader.count ? err.split('\n').find((l) => l.trim()) : undefined
+        resolve(reader.result(bad))
+      })
+    })
+  }
+}
 
 const IGNORE = new Set(['.git', 'node_modules', '.build', 'dist', 'out', '.next', '.cache', 'DerivedData', '.venv', '__pycache__', 'target', '.gradle'])
 const MAX = 40_000

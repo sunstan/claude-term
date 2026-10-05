@@ -17,7 +17,7 @@ import { ProjectLinks } from './services/links'
 import { Skills } from './services/skills'
 import { Mcp } from './services/mcp'
 import { scanClaudeProcesses } from './services/process'
-import { FileIndex } from './services/search'
+import { ContentSearch, FileIndex } from './services/search'
 import { Attachments } from './services/attachments'
 import { PluginHost } from './services/plugins'
 import { Updater } from './services/updater'
@@ -248,6 +248,8 @@ ipcMain.handle('proc:scan', () => scanClaudeProcesses(ptys.pids()))
 ipcMain.on('proc:kill', (_e, { pid, signal }) => { try { process.kill(pid, signal ?? 'SIGTERM') } catch { /* gone */ } })
 const index = new FileIndex()
 ipcMain.handle('search:files', (_e, { root, query }) => index.search(root, query))
+const contentSearch = new ContentSearch()
+ipcMain.handle('search:content', (_e, { root, query }) => (typeof root === 'string' && isAbsolute(root) && query && typeof query.query === 'string' ? contentSearch.run(root, query) : { files: [], count: 0, truncated: false }))
 
 // attachments (images → files → prompt)
 const attachments = new Attachments()

@@ -324,6 +324,8 @@ export interface CtApi {
   }
   search: {
     files(root: string, query: string): Promise<string[]>
+    /** text or regex in the project's files (ripgrep); a new call stops the previous one, which resolves early */
+    content(root: string, query: import('./search').ContentQuery): Promise<import('./search').ContentResult>
   }
   plugins: {
     list(): Promise<PluginInfo[]>

@@ -2,7 +2,7 @@
 import {
   Files, Search, Box, Plug, Puzzle, Cpu, Clock, Terminal, Plus, X, ChevronRight, ChevronDown, ChevronUp,
   Folder, File, Link, Info, ExternalLink, ArrowUp, List, Activity, Save, Settings, Image, Code, Columns2, Eye, Play, Camera, Sparkle,
-  GitBranch, Minus, Check, SquareTerminal, Power, PowerOff, Download, RefreshCw, Gauge, Square,
+  GitBranch, Minus, Check, SquareTerminal, Power, PowerOff, Download, RefreshCw, Gauge, Square, Filter,
   type LucideIcon,
 } from 'lucide-react'
 
@@ -18,4 +18,5 @@ export const Icons = {
   /** Claude (tabs, sessions, processes…): the terminal icon, in orange */
   claude: (size = 18) => <span className="ico-claude"><Terminal size={size} strokeWidth={1.8} aria-hidden /></span>, git: wrap(GitBranch), minus: wrap(Minus), check: wrap(Check),
   power: wrap(Power), powerOff: wrap(PowerOff), download: wrap(Download), refresh: wrap(RefreshCw), gauge: wrap(Gauge), stop: wrap(Square),
+  filter: wrap(Filter),
 }
