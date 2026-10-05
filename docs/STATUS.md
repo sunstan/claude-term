@@ -105,6 +105,15 @@ Handoff for the next session. Design: `docs/DESIGN.md`. Working rules: `CLAUDE.m
   every IPC reply (`shared/mcp-secrets.ts`); main takes them back from the server's source (`ref`) on save, and adds
   user servers itself. Copy from every project Claude Code knows (~/.claude.json), not only the recent ones. Local
   servers and disabled ones are found again on Windows (keys with forward slashes).
+- **Git plugin**: a chip on project tabs and linked folders (branch ↑↓●, a dot on conflicts or a divergence; one
+  `git status` per repository every 15 s, none while the window is hidden). Switching branch with changes asks: set
+  them aside (`git stash push -u -m "ClaudeTerm: <branch>"`, then switch; back on the branch, Réappliquer pops it) or
+  carry them. Tout mettre à jour: `git pull --ff-only` per open repository, with a report. Worktrees listed, opened
+  as a project with a Claude tab, created next to the repository (`<repo>.worktrees/<branch>`), removed without
+  `--force`. The branch's PR / MR (gh or glab when installed, 60 s cache) with its checks and review. Parsers and
+  model at 100 % coverage (`tests/git-plugin.test.ts`, `tests/git-worktrees.test.ts`). Plugin API:
+  `workspace.projects` / `onDidChangeProjects`, `visible` / `onDidChangeVisibility`, `openProject`, `openUrl`,
+  `ui.projectDecoration`, `prompt({ choice })`.
 - **App icon**: new logo (`build/src/logo.svg`, 800 px full bleed) placed on the macOS grid in
   `build/src/icon.svg` (824 px body, 100 px margin on 1024); `build/icon.png` / `icon.icns` generated from it.
 - **Tabs reopen at launch** (2026-10-10): Claude tabs resume their session, shells reopen in their folder with their last

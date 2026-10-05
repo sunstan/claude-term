@@ -1,11 +1,17 @@
 // Pure model of the git plugin: state + event → new state, effects (git commands, views, prompts).
 // No I/O here. main.js executes the effects. Every write is a plain git command; nothing destructive.
-const { LABELS } = require('./git')
+const { LABELS, stashFor, stashMessage, worktreePath } = require('./git')
 const { layout } = require('./graph')
 
 const RUN = (args) => ({ type: 'run', args })
 const initialState = () => ({ root: null, status: null, commits: [], refs: { local: [], remote: [] }, checked: {}, message: '', amend: false, detail: null, collapsed: {}, groupByDir: false,
-  selectedCommit: null, commitFiles: null, commitInfo: null })
+  selectedCommit: null, commitFiles: null, commitInfo: null, stashes: [], worktrees: [], pr: null })
+
+// the choices offered when switching branch with changes in progress
+const SET_ASIDE = 'Les mettre de côté (git stash), puis changer'
+const CARRY = 'Changer en les gardant'
+const samePath = (a, b) => !!a && !!b && a.replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase() === b.replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase()
+const baseName = (p) => p.replace(/[\\/]+$/, '').split(/[\\/]/).pop()
 
 /** Files grouped by directory, single-child chains compacted ("src/main/services"), like JetBrains. */
 function dirTree(entries, checked, group, collapsed) {
@@ -80,6 +86,7 @@ function changesView(s) {
 
 const branchMenu = (b) => [
   { id: 'switch', title: `Basculer sur ${b.name} (git switch)`, icon: 'git', disabled: b.current },
+  { id: 'worktree', title: 'Ouvrir dans un worktree (projet + Claude)', icon: 'columns', disabled: b.current },
   { id: 'newFrom', title: `Nouvelle branche depuis ${b.name}…`, icon: 'plus' },
   { id: 'diffWorkTree', title: "Diff avec l'arbre de travail", icon: 'columns' },
   'sep',
@@ -105,12 +112,67 @@ function branchesView(s) {
     { id: 'newFrom', title: `Nouvelle branche depuis ${r.full}…`, icon: 'plus' },
     { id: 'diffWorkTree', title: "Diff avec l'arbre de travail", icon: 'columns' },
   ] })
+  const aside = stashFor(s.stashes, s.status.branch)
+  const others = s.worktrees.filter((w) => !w.bare && !samePath(w.path, s.root))
   const items = [
     { id: 'head', label: `HEAD (${cur})`, icon: 'git', color: 'accent' },
+    ...(s.pr ? [prItem(s.pr)] : []),
+    ...(aside ? [{ id: `stash:${aside.ref}`, label: 'Réappliquer les modifications mises de côté', detail: aside.ref, icon: 'arrowUp', actions: [{ id: 'pop', title: `Réappliquer (git stash pop ${aside.ref})`, icon: 'check', primary: true }] }] : []),
     { id: 'g:local', label: 'Local', detail: `${local.length}`, expanded: !s.collapsed['g:local'], children: local },
     ...Object.keys(byRemote).sort().map((r) => ({ id: `g:remote:${r}`, label: r, detail: `${byRemote[r].length}`, expanded: !s.collapsed[`g:remote:${r}`], children: byRemote[r] })),
+    ...(others.length ? [{ id: 'g:worktrees', label: 'Worktrees', detail: `${others.length}`, expanded: !s.collapsed['g:worktrees'], children: others.map((w) => ({
+      id: `wt:${w.path}`, label: baseName(w.path), detail: w.branch || 'HEAD détachée', icon: 'columns', badges: [...(w.locked ? ['verrouillé'] : []), ...(w.prunable ? ['introuvable'] : [])],
+      actions: [{ id: 'openWorktree', title: 'Ouvrir (projet + Claude)', icon: 'external', primary: true }],
+      contextMenu: [{ id: 'openWorktree', title: 'Ouvrir (projet + Claude)', icon: 'external' }, 'sep', { id: 'removeWorktree', title: "Supprimer le worktree (git worktree remove, refusé s'il a des modifications)", icon: 'x' }],
+    })) }] : []),
   ]
-  return { kind: 'tree', items, toolbar: [{ id: 'fetch', title: 'Récupérer (git fetch --all --prune)', icon: 'activity' }, { id: 'newBranch', title: 'Nouvelle branche…', icon: 'plus' }] }
+  return {
+    kind: 'tree', items,
+    toolbar: [
+      { id: 'fetch', title: 'Récupérer (git fetch --all --prune)', icon: 'activity' },
+      { id: 'pullAll', title: 'Mettre à jour tous les projets ouverts (git pull --ff-only)', icon: 'download' },
+      { id: 'newWorktree', title: 'Nouvelle branche dans un worktree…', icon: 'columns' },
+      { id: 'newBranch', title: 'Nouvelle branche…', icon: 'plus' },
+    ],
+  }
+}
+
+const PR_STATE = { open: 'ouverte', draft: 'brouillon', merged: 'fusionnée', closed: 'fermée' }
+const CHECKS = { pass: 'checks ✓', fail: 'checks ✗', pending: 'checks …' }
+const REVIEW = { approved: 'approuvée', changes: 'changements demandés', required: 'revue attendue' }
+function prItem(pr) {
+  return {
+    id: 'pr', label: `${pr.url && /gitlab/i.test(pr.url) ? 'MR !' : 'PR #'}${pr.number} · ${PR_STATE[pr.state] || pr.state}`, detail: pr.title, icon: 'external',
+    color: pr.checks === 'fail' ? 'badge.error' : pr.state === 'merged' ? 'badge.ok' : undefined,
+    badges: [...(pr.checks ? [CHECKS[pr.checks]] : []), ...(pr.review ? [REVIEW[pr.review]] : [])],
+    actions: [{ id: 'openPr', title: 'Ouvrir dans le navigateur', icon: 'external', primary: true }],
+  }
+}
+
+const PULL_TEXT = {
+  upToDate: () => 'à jour', pulled: (r) => `${r.count} commit${r.count > 1 ? 's' : ''} récupéré${r.count > 1 ? 's' : ''}`,
+  diverged: () => 'divergé : fusionner ou rebaser à la main', changes: () => 'modifications en cours : rien fait',
+  noUpstream: () => 'pas de branche suivie', error: (r) => `erreur : ${r.error}`,
+}
+/** The report of "Mettre à jour tous les projets": one line per repository. */
+function pullReport(results) {
+  if (!results.length) return 'Aucun dépôt git parmi les projets ouverts.'
+  return ['**git pull --ff-only**', '', ...results.map((r) => `- **${baseName(r.repo)}** : ${PULL_TEXT[r.kind](r)}`)].join('\n')
+}
+
+/** Tracked changes (or conflicts) that a switch would carry or refuse. */
+const hasChanges = (s) => !!s.status && s.status.entries.some((e) => !e.untracked)
+/** Switching branch: with changes in progress, the user chooses first (set them aside, carry them, cancel). */
+function switchTo(s, target) {
+  if (!hasChanges(s)) return [RUN(['switch', target])]
+  return [{ type: 'prompt', req: { title: `Basculer sur ${target}`, placeholder: 'Des modifications sont en cours.', options: [SET_ASIDE, CARRY], choice: true }, then: { type: 'promptResult', action: 'switchChoice', target } }]
+}
+/** A branch's worktree: opened when it exists, else created next to the repository then opened. */
+function openWorktree(s, branch, create) {
+  const wt = s.worktrees.find((w) => w.branch === branch)
+  if (wt && !create) return [{ type: 'openProject', path: wt.path }]
+  const path = worktreePath(s.root, branch)
+  return [{ type: 'runThenOpen', seq: [['worktree', 'add', path, ...(create ? ['-b', branch] : [branch])]], path }]
 }
 
 const TONES = { A: 'added', D: 'deleted', R: 'renamed', C: 'renamed', M: 'modified', T: 'modified' }
@@ -224,6 +286,7 @@ function commitCommands(s, push) {
  * Reduces an event. Returns { state, effects }. Effects:
  *  run {args} or {seq: args[]} (chained on success) · refresh · detailFile {path} · detailCommit {hash} · diffFile {path} · diffRef {ref} · diffCommit {hash}
  *  openFile {path} · prompt {req, then} (then: event to dispatch with value) · popover {model} · closePopover · notify {title, body} · copy {text}
+ *  openUrl {url} · openProject {path} (with a Claude tab) · runThenOpen {seq, path} (the project opens once git made it) · pullAll
  */
 function reduce(s, e) {
   const ef = []
@@ -248,6 +311,8 @@ function reduce(s, e) {
     if (e.actionId === 'fetch') return { state: s, effects: [RUN(['fetch', '--all', '--prune'])] }
     if (e.actionId === 'newBranch') return { state: s, effects: [{ type: 'prompt', req: { title: 'Nouvelle branche (git switch -c)', placeholder: 'nom' }, then: { type: 'promptResult', action: 'newBranch' } }] }
     if (e.actionId === 'branch') return { state: s, effects: [{ type: 'popover', view: 'changes', model: branchPopover(s) }] }
+    if (e.actionId === 'pullAll') return { state: s, effects: [{ type: 'pullAll' }] }
+    if (e.actionId === 'newWorktree') return { state: s, effects: [{ type: 'prompt', req: { title: 'Nouvelle branche dans un worktree (à côté du dépôt)', placeholder: 'nom de la branche' }, then: { type: 'promptResult', action: 'newWorktree' } }] }
     if (e.actionId === 'groupDirs') return { state: { ...s, groupByDir: !s.groupByDir }, effects: [{ type: 'persist', key: 'groupByDir', value: !s.groupByDir }] }
     if (e.actionId === 'toggleAll') {
       const keys = ['g:conflicts', 'g:changes', 'g:untracked']
@@ -263,6 +328,11 @@ function reduce(s, e) {
     if (e.action === 'newBranch') return { state: s, effects: [RUN(['switch', '-c', v, ...(e.from ? [e.from] : [])])] }
     if (e.action === 'rename') return { state: s, effects: [RUN(['branch', '-m', e.from, v])] }
     if (e.action === 'checkoutRev') return { state: s, effects: [RUN(['switch', '--detach', v])] }
+    if (e.action === 'newWorktree') return { state: s, effects: s.root ? openWorktree(s, v, true) : ef }
+    if (e.action === 'switchChoice') {
+      if (v === CARRY) return { state: s, effects: [RUN(['switch', e.target])] }
+      if (v === SET_ASIDE) return { state: s, effects: [{ type: 'run', seq: [['stash', 'push', '-u', '-m', stashMessage(s.status && s.status.branch || 'HEAD')], ['switch', e.target]] }] }
+    }
     return { state: s, effects: ef }
   }
   const id = e.itemId || ''
@@ -274,10 +344,13 @@ function reduce(s, e) {
       else if (id === 'fetch') effects.push(RUN(['fetch', '--all', '--prune']))
       else if (id === 'newBranch') effects.push({ type: 'prompt', req: { title: 'Nouvelle branche (git switch -c)', placeholder: 'nom' }, then: { type: 'promptResult', action: 'newBranch' } })
       else if (id === 'checkoutRev') effects.push({ type: 'prompt', req: { title: 'Checkout tag ou révision (git switch --detach)', placeholder: 'v1.2.0, abc123…' }, then: { type: 'promptResult', action: 'checkoutRev' } })
-      else if (id.startsWith('local:')) { const b = s.refs.local.find((x) => x.name === id.slice(6)); if (b && !b.current) effects.push(RUN(['switch', b.name])) }
-      else if (id.startsWith('remote:')) effects.push(RUN(['switch', localName(id.slice(7))]))
+      else if (id.startsWith('local:')) { const b = s.refs.local.find((x) => x.name === id.slice(6)); if (b && !b.current) effects.push(...switchTo(s, b.name)) }
+      else if (id.startsWith('remote:')) effects.push(...switchTo(s, localName(id.slice(7))))
       return { state: s, effects }
     }
+    if (id === 'pr') return { state: s, effects: s.pr && s.pr.url ? [{ type: 'openUrl', url: s.pr.url }] : ef }
+    if (id.startsWith('stash:')) return { state: s, effects: e.type === 'open' ? [RUN(['stash', 'pop', id.slice(6)])] : ef }
+    if (id.startsWith('wt:')) return { state: s, effects: e.type === 'open' ? [{ type: 'openProject', path: id.slice(3) }] : ef }
     if (id.startsWith('file:')) return { state: s, effects: [e.type === 'open' ? { type: 'diffFile', path: id.slice(5) } : { type: 'detailFile', path: id.slice(5) }] }
     if (id.startsWith('commit:')) {
       const hash = id.slice(7)
@@ -288,11 +361,20 @@ function reduce(s, e) {
       const f = (s.commitFiles || []).find((x) => x.path === id.slice(6))
       return { state: s, effects: f && s.commitInfo ? [{ type: 'diffCommitFile', hash: s.commitInfo.hash, parent: s.commitInfo.parents[0] || null, file: f }] : ef }
     }
-    if (id.startsWith('local:') && e.type === 'open') { const b = s.refs.local.find((x) => x.name === id.slice(6)); return { state: s, effects: b && !b.current ? [RUN(['switch', b.name])] : ef } }
+    if (id.startsWith('local:') && e.type === 'open') { const b = s.refs.local.find((x) => x.name === id.slice(6)); return { state: s, effects: b && !b.current ? switchTo(s, b.name) : ef } }
     return { state: s, effects: ef }
   }
-  if (e.type === 'menu') {
+  // a row's buttons (action) and its right-click menu (menu) do the same
+  if (e.type === 'menu' || e.type === 'action') {
     const a = e.actionId
+    if (id === 'pr') return { state: s, effects: a === 'openPr' && s.pr && s.pr.url ? [{ type: 'openUrl', url: s.pr.url }] : ef }
+    if (id.startsWith('stash:')) return { state: s, effects: a === 'pop' ? [RUN(['stash', 'pop', id.slice(6)])] : ef }
+    if (id.startsWith('wt:')) {
+      const path = id.slice(3)
+      if (a === 'openWorktree') return { state: s, effects: [{ type: 'openProject', path }] }
+      if (a === 'removeWorktree') return { state: s, effects: [RUN(['worktree', 'remove', path])] }
+      return { state: s, effects: ef }
+    }
     if (id.startsWith('cfile:')) {
       const f = (s.commitFiles || []).find((x) => x.path === id.slice(6))
       if (a === 'openFile') return { state: s, effects: [{ type: 'openFile', path: id.slice(6) }] }
@@ -317,8 +399,9 @@ function reduce(s, e) {
     }
     const isRemote = id.startsWith('remote:')
     const name = isRemote ? id.slice(7) : id.slice(6)
-    if (a === 'switch') return { state: s, effects: [RUN(['switch', name])] }
-    if (a === 'switchRemote') return { state: s, effects: [RUN(['switch', localName(name)])] }
+    if (a === 'switch') return { state: s, effects: switchTo(s, name) }
+    if (a === 'switchRemote') return { state: s, effects: switchTo(s, localName(name)) }
+    if (a === 'worktree' && !isRemote) return { state: s, effects: s.root ? openWorktree(s, name, false) : ef }
     if (a === 'newFrom') return { state: s, effects: [{ type: 'prompt', req: { title: `Nouvelle branche depuis ${name}`, placeholder: 'nom' }, then: { type: 'promptResult', action: 'newBranch', from: name } }] }
     if (a === 'diffWorkTree') return { state: s, effects: [{ type: 'diffRef', ref: name }] }
     if (a === 'update') return { state: s, effects: [RUN(['pull'])] }
@@ -330,12 +413,22 @@ function reduce(s, e) {
   return { state: s, effects: ef }
 }
 
-/** After a refresh: keeps checked paths that still exist, and the selected commit if it is still listed. */
-function withData(s, root, status, commits, refs) {
+/**
+ * After a refresh: keeps checked paths that still exist, and the selected commit if it is still listed. `extra`:
+ * the stashes and worktrees read with it. The PR stays while the branch does (withPr replaces it).
+ */
+function withData(s, root, status, commits, refs, extra = {}) {
   const checked = {}
   if (status) for (const e of status.entries) if (s.checked[e.path]) checked[e.path] = true
   const keep = commits.some((c) => c.hash === s.selectedCommit)
-  return { ...s, root, status, commits, refs, checked, ...(keep ? {} : { selectedCommit: null, commitFiles: null, commitInfo: null }) }
+  const sameBranch = s.root === root && s.status && status && s.status.branch === status.branch
+  return { ...s, root, status, commits, refs, checked, stashes: extra.stashes || [], worktrees: extra.worktrees || [], pr: sameBranch ? s.pr : null,
+    ...(keep ? {} : { selectedCommit: null, commitFiles: null, commitInfo: null }) }
+}
+
+/** The PR / MR of `branch` (ignored if the branch changed meanwhile). */
+function withPr(s, branch, pr) {
+  return s.status && s.status.branch === branch ? { ...s, pr } : s
 }
 
 /** Loaded data of the selected commit (ignored if the selection changed meanwhile). */
@@ -343,4 +436,4 @@ function withCommit(s, hash, files, info) {
   return s.selectedCommit === hash ? { ...s, commitFiles: files, commitInfo: info } : s
 }
 
-module.exports = { initialState, changesView, branchesView, commitsView, commitFilesView, commitInfoView, branchPopover, reduce, withData, withCommit, commitCommands, checkedPaths, dirTree }
+module.exports = { initialState, changesView, branchesView, commitsView, commitFilesView, commitInfoView, branchPopover, reduce, withData, withCommit, withPr, commitCommands, checkedPaths, dirTree, pullReport, switchTo, SET_ASIDE, CARRY }

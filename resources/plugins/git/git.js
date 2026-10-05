@@ -94,4 +94,108 @@ function parseRefs(text) {
 
 const LABELS = { M: 'modifié', A: 'ajouté', D: 'supprimé', R: 'renommé', C: 'copié', T: 'type', U: 'conflit' }
 
-module.exports = { parseStatus, parseLog, parseRefs, parseDecorations, parseNameStatus, parseCommitInfo, LOG_FORMAT, REF_FORMAT, INFO_FORMAT, LABELS }
+/** `git worktree list --porcelain` → [{ path, head, branch, detached, bare, locked, prunable }] */
+function parseWorktrees(text) {
+  const out = []
+  let cur = null
+  for (const line of text.split('\n')) {
+    if (line.startsWith('worktree ')) { cur = { path: line.slice(9), head: null, branch: null, detached: false, bare: false, locked: false, prunable: false }; out.push(cur); continue }
+    if (!cur) continue
+    if (line.startsWith('HEAD ')) cur.head = line.slice(5)
+    else if (line.startsWith('branch ')) cur.branch = line.slice(7).replace(/^refs\/heads\//, '')
+    else if (line === 'detached') cur.detached = true
+    else if (line === 'bare') cur.bare = true
+    else if (line === 'locked' || line.startsWith('locked ')) cur.locked = true
+    else if (line === 'prunable' || line.startsWith('prunable ')) cur.prunable = true
+  }
+  return out
+}
+
+const STASH_FORMAT = '%gd%x1f%s'
+/** `git stash list --format=<STASH_FORMAT>` → [{ ref, message }] */
+function parseStashes(text) {
+  return text.split('\n').filter((l) => l.includes('\x1f')).map((l) => { const [ref, ...rest] = l.split('\x1f'); return { ref, message: rest.join('\x1f') } })
+}
+
+/** The message our switch puts on what it sets aside, and the stash holding it for `branch` (newest first). */
+const stashMessage = (branch) => `ClaudeTerm: ${branch}`
+const stashFor = (stashes, branch) => (branch ? stashes.find((x) => x.message.endsWith(': ' + stashMessage(branch)) || x.message === stashMessage(branch)) || null : null)
+
+/**
+ * `gh pr view --json number,url,state,isDraft,title,statusCheckRollup,reviewDecision` or `glab mr view -F json` →
+ * { number, url, title, state: open | draft | merged | closed, checks: pass | fail | pending | null, review: approved | changes | required | null }
+ */
+function parsePr(text, cli) {
+  let j
+  try { j = JSON.parse(text) } catch (e) { return null }
+  if (!j || typeof j !== 'object') return null
+  if (cli === 'glab') {
+    const st = String(j.state || '').toLowerCase()
+    const pipe = String((j.head_pipeline && j.head_pipeline.status) || (j.pipeline && j.pipeline.status) || '').toLowerCase()
+    return {
+      number: j.iid, url: j.web_url, title: j.title || '',
+      state: st === 'merged' ? 'merged' : st === 'closed' ? 'closed' : j.draft || j.work_in_progress ? 'draft' : 'open',
+      checks: !pipe ? null : pipe === 'success' ? 'pass' : ['failed', 'canceled'].includes(pipe) ? 'fail' : 'pending',
+      review: j.approved === true ? 'approved' : null,
+    }
+  }
+  const st = String(j.state || '').toUpperCase()
+  const rollup = Array.isArray(j.statusCheckRollup) ? j.statusCheckRollup : []
+  const verdicts = rollup.map((c) => {
+    const v = String(c.conclusion || c.state || '').toUpperCase()
+    if (c.status && String(c.status).toUpperCase() !== 'COMPLETED') return 'pending'
+    if (['SUCCESS', 'NEUTRAL', 'SKIPPED'].includes(v)) return 'pass'
+    if (['PENDING', 'EXPECTED', 'QUEUED', 'IN_PROGRESS', ''].includes(v)) return 'pending'
+    return 'fail'
+  })
+  const review = String(j.reviewDecision || '').toUpperCase()
+  return {
+    number: j.number, url: j.url, title: j.title || '',
+    state: st === 'MERGED' ? 'merged' : st === 'CLOSED' ? 'closed' : j.isDraft ? 'draft' : 'open',
+    checks: !verdicts.length ? null : verdicts.includes('fail') ? 'fail' : verdicts.includes('pending') ? 'pending' : 'pass',
+    review: review === 'APPROVED' ? 'approved' : review === 'CHANGES_REQUESTED' ? 'changes' : review === 'REVIEW_REQUIRED' ? 'required' : null,
+  }
+}
+
+/**
+ * What `git pull --ff-only` did to one repository, from what was read around it:
+ * { dirty, upstream, code, before, after, count, ahead, behind, stderr } → { kind, count?, error? }
+ * kinds: changes (tracked changes, nothing done), noUpstream, upToDate, pulled, diverged, error
+ */
+function classifyPull(r) {
+  if (r.dirty) return { kind: 'changes' }
+  if (!r.upstream) return { kind: 'noUpstream' }
+  if (r.code === 0) return r.before && r.after && r.before !== r.after ? { kind: 'pulled', count: r.count || 0 } : { kind: 'upToDate' }
+  if (r.ahead > 0 && r.behind > 0) return { kind: 'diverged' }
+  return { kind: 'error', error: String(r.stderr || '').split('\n').map((l) => l.trim()).filter(Boolean).pop() || 'git pull a échoué' }
+}
+
+/** A branch's worktree next to the repository, never inside it: `<repo>.worktrees/<branch>` (slashes as dashes). */
+function worktreePath(repo, branch) {
+  const base = repo.replace(/[\\/]+$/, '')
+  const sep = base.includes('\\') && !base.includes('/') ? '\\' : '/'
+  return `${base}.worktrees${sep}${branch.replace(/[\\/:*?"<>|\s]+/g, '-').replace(/^-+|-+$/g, '')}`
+}
+
+const CHIP_NAME = 24
+/** The chip of a project tab: branch ↑ahead ↓behind ● (changes), with a dot on conflicts or a divergence. */
+function branchChip(st) {
+  const name = st.detached ? 'HEAD' : st.branch || '?'
+  const conflicts = st.entries.filter((e) => e.conflict).length
+  const changed = st.entries.length
+  // a long branch name is cut on the tab, whole in the tooltip
+  const short = name.length > CHIP_NAME ? name.slice(0, CHIP_NAME - 1) + '…' : name
+  const text = short + (st.ahead ? ` ↑${st.ahead}` : '') + (st.behind ? ` ↓${st.behind}` : '') + (changed ? ' ●' : '')
+  const tip = [st.detached ? 'HEAD détachée' : `Branche ${name}`]
+  if (st.ahead) tip.push(`${st.ahead} commit${st.ahead > 1 ? 's' : ''} à pousser`)
+  if (st.behind) tip.push(`${st.behind} commit${st.behind > 1 ? 's' : ''} à récupérer`)
+  if (conflicts) tip.push(`${conflicts} conflit${conflicts > 1 ? 's' : ''}`)
+  else if (changed) tip.push(`${changed} fichier${changed > 1 ? 's' : ''} modifié${changed > 1 ? 's' : ''}`)
+  const tone = conflicts ? 'error' : st.ahead && st.behind ? 'warn' : undefined
+  return { text, ...(tone ? { tone } : {}), tooltip: tip.join(' · ') }
+}
+
+module.exports = {
+  parseStatus, parseLog, parseRefs, parseDecorations, parseNameStatus, parseCommitInfo, parseWorktrees, parseStashes, parsePr,
+  classifyPull, worktreePath, branchChip, stashMessage, stashFor, LOG_FORMAT, REF_FORMAT, INFO_FORMAT, STASH_FORMAT, LABELS,
+}
