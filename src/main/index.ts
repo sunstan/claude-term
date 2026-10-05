@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, ipcMain, shell, nativeTheme, session, net } from 'electron'
+import { app, BrowserWindow, Menu, dialog, ipcMain, shell, nativeTheme, session, net } from 'electron'
 import { join, basename, isAbsolute, resolve, parse } from 'node:path'
 import { homedir } from 'node:os'
 import { execFile, spawnSync } from 'node:child_process'
@@ -30,7 +30,17 @@ import { NPM_LATEST, STATUS_URL, parseStatusPage } from '@shared/claude-info'
 import { PluginStore, type ApprovalRequest } from './services/plugin-store'
 import { catalogueItems, type Catalogue, type RegistryEntry } from '@shared/plugin-registry'
 import { PLUGIN_PERMISSIONS, type PluginPermission } from '@shared/plugins'
+import { opensInDefaultApp } from '@shared/external'
 import type { DirEntry } from '@shared/ipc'
+
+// One packaged instance: a second one would drain the same hook spool (userData/events) and take the first one's
+// events. It leaves before any service starts. Dev runs are left out: electron-vite starts the new app before the old
+// one has quit.
+if (app.isPackaged && !app.requestSingleInstanceLock()) process.exit(0)
+app.on('second-instance', () => { if (win) { if (win.isMinimized()) win.restore(); win.show(); win.focus() } })
+
+// Windows: notifications are attributed to the Start menu shortcut, whose AppUserModelID is the appId of electron-builder.yml
+if (process.platform === 'win32' && app.isPackaged) app.setAppUserModelId('fr.jerome.claudeterm')
 
 // Chrome DevTools Protocol for scripted UI checks (scripts/ui.ts): always in dev, on demand (CT_CDP_PORT) when packaged
 if (!app.isPackaged || process.env.CT_CDP_PORT) {
@@ -350,7 +360,12 @@ ipcMain.handle('app:pickFolder', async () => {
   const r = await dialog.showOpenDialog(win!, { properties: ['openDirectory', 'createDirectory', 'showHiddenFiles'] })
   return r.canceled ? null : r.filePaths[0]
 })
-ipcMain.on('app:openExternal', (_e, p: string) => { shell.openPath(p) })
+// files the editor cannot show: their default app when it only views them, otherwise their folder (opening a
+// program or a script would run it)
+ipcMain.on('app:openExternal', (_e, p: string) => {
+  if (typeof p !== 'string' || !isAbsolute(p)) return
+  if (opensInDefaultApp(p)) shell.openPath(p); else shell.showItemInFolder(p)
+})
 // web links go to the default browser (https only)
 ipcMain.on('app:openUrl', (_e, url: string) => { if (/^https:\/\//.test(url)) shell.openExternal(url) })
 ipcMain.on('app:reveal', (_e, p: string) => { shell.showItemInFolder(p) })
@@ -364,6 +379,9 @@ app.whenReady().then(() => {
   session.defaultSession.setPermissionCheckHandler((_wc, permission) => permission === 'local-fonts')
   session.defaultSession.setPermissionRequestHandler((_wc, permission, cb) => cb(permission === 'local-fonts'))
   nativeTheme.themeSource = settings.get().themeFollowSystem ? 'system' : themes.current().type
+  // Windows / Linux have no menu bar, so no default menu either: its accelerators act whenever the page leaves a key
+  // alone (Ctrl+R reloads the workbench, Ctrl+W closes the window and quits). macOS keeps it for its menu bar.
+  if (process.platform !== 'darwin') Menu.setApplicationMenu(null)
   win = createWindow(themes.current())
   // plugin windows are hidden BrowserWindows too: closing the workbench window quits
   win.webContents.once('did-finish-load', () => { pluginStore.cleanStaging(); pluginHost.loadAll(); updater.start() })
