@@ -4,7 +4,7 @@ import { reorder } from '@shared/order'
 /**
  * Drag and drop reordering of a row of tabs (axis x) or a list (axis y), live: while an item is dragged, the others
  * make room where it would land (render the items through `arrange`); the move is saved on drop and undone when the
- * drag ends anywhere else. An item moves past another once the pointer crosses that one's middle, so items of
+ * drag ends anywhere else. Hovering an item takes its place, in the direction the pointer goes, so items of
  * different sizes do not swap back and forth. `kind` keeps lists apart (a project tab cannot land among the center
  * tabs). Items slide to their new place (each one from where it was, through a transform). Spread `props(id)` on each
  * item and `zone` on their container.
@@ -43,9 +43,11 @@ export function useReorder(kind: string, onMove: (from: string, to: string, plac
       el.addEventListener('transitionend', () => { el.style.transition = '' }, { once: true })
     }
   }, [drag?.order])
-  const half = (e: DragEvent<HTMLElement>) => {
-    const r = e.currentTarget.getBoundingClientRect()
-    return (axis === 'x' ? e.clientX < r.left + r.width / 2 : e.clientY < r.top + r.height / 2) ? 'before' as const : 'after' as const
+  /** the pointer's last position along the axis, and which way it last moved (-1 back, 1 forward) */
+  const pointer = useRef<{ at: number; dir: number }>({ at: 0, dir: 0 })
+  const track = (e: DragEvent<HTMLElement>) => {
+    const at = axis === 'x' ? e.clientX : e.clientY, p = pointer.current
+    if (at !== p.at) pointer.current = { at, dir: Math.sign(at - p.at) }
   }
   /** the items' saved order, as `arrange` last saw it */
   let ids: string[] = []
@@ -82,6 +84,7 @@ export function useReorder(kind: string, onMove: (from: string, to: string, plac
     draggable: true,
     onDragStart: (e: DragEvent<HTMLElement>) => {
       e.dataTransfer.setData(type, id); e.dataTransfer.effectAllowed = 'move'
+      pointer.current = { at: axis === 'x' ? e.clientX : e.clientY, dir: 0 }
       setDrag({ id, order: null })
       // not at once: the browser takes the drag image from the item once this handler returns
       setTimeout(() => setDragState((d) => (d?.id === id && !d.done ? { ...d, lifted: true } : d)))
@@ -89,14 +92,16 @@ export function useReorder(kind: string, onMove: (from: string, to: string, plac
     onDragOver: (e: DragEvent<HTMLElement>) => {
       if (!accepts(e)) return
       e.preventDefault(); e.dataTransfer.dropEffect = 'move'
+      track(e)
       const d = drag!
       if (id === d.id) return
       const order = d.order ?? ids
       const from = order.indexOf(d.id), to = order.indexOf(id)
       if (from < 0 || to < 0) return
-      // past the middle of the item, in the direction the pointer goes
-      const side = half(e)
-      if ((to > from && side === 'after') || (to < from && side === 'before')) setDrag({ ...d, order: reorder(order, (x) => x, d.id, id, side) })
+      // hovering an item takes its place, when the pointer goes its way: an item that slid under a still pointer (a
+      // wider one, after a swap) is not swapped back
+      if (to > from && pointer.current.dir > 0) setDrag({ ...d, order: reorder(order, (x) => x, d.id, id, 'after') })
+      else if (to < from && pointer.current.dir < 0) setDrag({ ...d, order: reorder(order, (x) => x, d.id, id, 'before') })
     },
     onDrop: (e: DragEvent<HTMLElement>) => { if (accepts(e)) { e.preventDefault(); e.stopPropagation(); commit() } },
     // after a drop the order shown stays (done); a drag ending anywhere else puts the items back
@@ -104,7 +109,7 @@ export function useReorder(kind: string, onMove: (from: string, to: string, plac
   })
   /** The container: a drop between two items, or past the last one, keeps the order shown. */
   const zone = {
-    onDragOver: (e: DragEvent<HTMLElement>) => { if (accepts(e)) { e.preventDefault(); e.dataTransfer.dropEffect = 'move' } },
+    onDragOver: (e: DragEvent<HTMLElement>) => { if (accepts(e)) { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; track(e) } },
     onDrop: (e: DragEvent<HTMLElement>) => { if (accepts(e)) { e.preventDefault(); commit() } },
   }
   /** ' dragging' on the item being dragged: its slot, where it will land, shows empty. */
