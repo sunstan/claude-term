@@ -100,7 +100,8 @@ export interface Context {
     onRun(cb: (id: string) => void): () => void
   }
   /** requires the "process" permission */
-  process: { exec(file: string, args?: string[], opts?: { cwd?: string }): Promise<{ code: number; stdout: string; stderr: string }> }
+  /** non-interactive (git and ssh never ask), stopped after `timeout` ms (default 120 000, at most 600 000) */
+  process: { exec(file: string, args?: string[], opts?: { cwd?: string; timeout?: number }): Promise<{ code: number; stdout: string; stderr: string }> }
   settings: { get(key: string): unknown }
   storage: { get(key: string): unknown; set(key: string, value: unknown): void }
 }

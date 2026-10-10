@@ -10,7 +10,9 @@ const initialState = () => ({ root: null, status: null, commits: [], refs: { loc
 // the choices offered when switching branch with changes in progress
 const SET_ASIDE = 'Les mettre de côté (git stash), puis changer'
 const CARRY = 'Changer en les gardant'
-const samePath = (a, b) => !!a && !!b && a.replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase() === b.replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase()
+// case only counts outside Windows (a drive letter or backslashes)
+const normPath = (p) => { const s = p.replace(/\\/g, '/').replace(/\/+$/, ''); return /^[A-Za-z]:|\\/.test(p) ? s.toLowerCase() : s }
+const samePath = (a, b) => !!a && !!b && normPath(a) === normPath(b)
 const baseName = (p) => p.replace(/[\\/]+$/, '').split(/[\\/]/).pop()
 
 /** Files grouped by directory, single-child chains compacted ("src/main/services"), like JetBrains. */
@@ -117,7 +119,7 @@ function branchesView(s) {
   const items = [
     { id: 'head', label: `HEAD (${cur})`, icon: 'git', color: 'accent' },
     ...(s.pr ? [prItem(s.pr)] : []),
-    ...(aside ? [{ id: `stash:${aside.ref}`, label: 'Réappliquer les modifications mises de côté', detail: aside.ref, icon: 'arrowUp', actions: [{ id: 'pop', title: `Réappliquer (git stash pop ${aside.ref})`, icon: 'check', primary: true }] }] : []),
+    ...(aside ? [{ id: `stash:${aside.hash}`, label: 'Réappliquer les modifications mises de côté', detail: aside.ref, icon: 'arrowUp', actions: [{ id: 'pop', title: `Réappliquer (git stash pop ${aside.ref})`, icon: 'check', primary: true }] }] : []),
     { id: 'g:local', label: 'Local', detail: `${local.length}`, children: local },
     ...Object.keys(byRemote).sort().map((r) => ({ id: `g:remote:${r}`, label: r, detail: `${byRemote[r].length}`, children: byRemote[r] })),
     ...(others.length ? [{ id: 'g:worktrees', label: 'Worktrees', detail: `${others.length}`, children: others.map((w) => ({
@@ -343,7 +345,8 @@ function reduce(s, e) {
       return { state: s, effects }
     }
     if (id === 'pr') return { state: s, effects: s.pr && s.pr.url ? [{ type: 'openUrl', url: s.pr.url }] : ef }
-    if (id.startsWith('stash:')) return { state: s, effects: e.type === 'open' ? [RUN(['stash', 'pop', id.slice(6)])] : ef }
+    // by its hash: another stash pushed since would shift stash@{n} (main.js finds the entry before popping)
+    if (id.startsWith('stash:')) return { state: s, effects: e.type === 'open' ? [{ type: 'popStash', hash: id.slice(6) }] : ef }
     if (id.startsWith('wt:')) return { state: s, effects: e.type === 'open' ? [{ type: 'openProject', path: id.slice(3) }] : ef }
     if (id.startsWith('file:')) return { state: s, effects: [e.type === 'open' ? { type: 'diffFile', path: id.slice(5) } : { type: 'detailFile', path: id.slice(5) }] }
     if (id.startsWith('commit:')) {
@@ -362,11 +365,12 @@ function reduce(s, e) {
   if (e.type === 'menu' || e.type === 'action') {
     const a = e.actionId
     if (id === 'pr') return { state: s, effects: a === 'openPr' && s.pr && s.pr.url ? [{ type: 'openUrl', url: s.pr.url }] : ef }
-    if (id.startsWith('stash:')) return { state: s, effects: a === 'pop' ? [RUN(['stash', 'pop', id.slice(6)])] : ef }
+    if (id.startsWith('stash:')) return { state: s, effects: a === 'pop' ? [{ type: 'popStash', hash: id.slice(6) }] : ef }
     if (id.startsWith('wt:')) {
       const path = id.slice(3)
       if (a === 'openWorktree') return { state: s, effects: [{ type: 'openProject', path }] }
-      if (a === 'removeWorktree') return { state: s, effects: [RUN(['worktree', 'remove', path])] }
+      // asked first: git deletes the worktree's ignored files with it (.env, node_modules…)
+      if (a === 'removeWorktree') return { state: s, effects: [{ type: 'confirmRun', title: `Supprimer le worktree ${path} ? Ses fichiers ignorés par git (.env, node_modules…) partent avec.`, ok: 'Supprimer', args: ['worktree', 'remove', path] }] }
       return { state: s, effects: ef }
     }
     if (id.startsWith('cfile:')) {

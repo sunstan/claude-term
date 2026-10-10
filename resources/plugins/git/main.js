@@ -3,7 +3,9 @@ const { parseStatus, parseLog, parseRefs, parseNameStatus, parseCommitInfo, pars
 const M = require('./model')
 
 const CHIP_EVERY = 15000, PR_TTL = 60000
-const samePath = (a, b) => a.replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase() === b.replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase()
+// case only counts outside Windows (a drive letter or backslashes)
+const normPath = (p) => { const s = p.replace(/\\/g, '/').replace(/\/+$/, ''); return /^[A-Za-z]:|\\/.test(p) ? s.toLowerCase() : s }
+const samePath = (a, b) => normPath(a) === normPath(b)
 
 exports.activate = (ctx) => {
   const changes = ctx.ui.view('changes'), branches = ctx.ui.view('branches'), commits = ctx.ui.view('commits')
@@ -130,6 +132,16 @@ exports.activate = (ctx) => {
   async function effect(f) {
     if (f.type === 'run') return ctx.terminal.run({ cwd: s.root, argv: (f.seq || [f.args]).map((a) => ['git', ...a]), tab: 'reuse' })
     if (f.type === 'refresh') return refresh()
+    if (f.type === 'popStash') {
+      const st = parseStashes((await git(['stash', 'list', '--format=' + STASH_FORMAT])).stdout).find((x) => x.hash === f.hash)
+      if (!st) return ctx.ui.notify('Git', 'Ces modifications ne sont plus dans les stashs')
+      return ctx.terminal.run({ cwd: s.root, argv: [['git', 'stash', 'pop', st.ref]], tab: 'reuse' })
+    }
+    if (f.type === 'confirmRun') {
+      const ok = await ctx.ui.prompt({ title: f.title, options: [f.ok], choice: true })
+      if (ok === f.ok) return ctx.terminal.run({ cwd: s.root, argv: [['git', ...f.args]], tab: 'reuse' })
+      return
+    }
     if (f.type === 'openUrl') return ctx.workspace.openUrl(f.url)
     if (f.type === 'openProject') return ctx.workspace.openProject(f.path, { claude: true })
     if (f.type === 'runThenOpen') return runThenOpen(f.seq, f.path)

@@ -28,7 +28,11 @@ function repo() {
   return { t, r }
 }
 // a seq runs like the terminal chain: in order, stopping at the first failure (execFileSync throws)
-const runEffects = (r: string, effects: any[]) => effects.filter((f) => f.type === 'run').flatMap((f) => (f.seq ?? [f.args]).map((a: string[]) => git(r, ...a)))
+// as main.js runs them: a set-aside change is popped by finding its stash entry from its hash first
+const runEffects = (r: string, effects: any[]) => effects.flatMap((f) => {
+  if (f.type === 'popStash') { const st = stashes(r).find((x: any) => x.hash === f.hash); return st ? [git(r, 'stash', 'pop', st.ref)] : [] }
+  return f.type === 'run' ? (f.seq ?? [f.args]).map((a: string[]) => git(r, ...a)) : []
+})
 // the plugin's root is git's spelling of the repository (long names, forward slashes), as rev-parse prints it
 const top = (r: string) => git(r, 'rev-parse', '--show-toplevel').trim()
 const stateOf = (r: string, extra = {}) => M.withData(M.initialState(), top(r), status(r), log(r), refs(r), extra)
@@ -62,7 +66,7 @@ describe('git plugin parsers: worktrees, stashes, PR / MR, pull, chip', { timeou
     t.write('work/a.txt', 'other\n')
     git(r, 'stash', 'push', '-m', 'mine')
     const list = stashes(r)
-    expect(list).toEqual([{ ref: 'stash@{0}', message: 'On main: mine' }, { ref: 'stash@{1}', message: 'On main: ClaudeTerm: main' }])
+    expect(list).toEqual([{ ref: 'stash@{0}', hash: expect.stringMatching(/^[0-9a-f]{40}$/), message: 'On main: mine' }, { ref: 'stash@{1}', hash: expect.stringMatching(/^[0-9a-f]{40}$/), message: 'On main: ClaudeTerm: main' }])
     expect(stashFor(list, 'main')).toEqual(list[1])
     expect(stashFor(list, 'other')).toBeNull()
     expect(stashFor(list, null)).toBeNull()
@@ -188,9 +192,11 @@ describe('git plugin model: switching with changes, set aside, worktrees, PR, pu
     git(r, 'switch', '-q', 'main')
     const back = stateOf(r, { stashes: stashes(r) })
     const offer = M.branchesView(back).items.find((i: any) => i.id.startsWith('stash:'))
-    expect(offer).toMatchObject({ id: 'stash:stash@{0}', actions: [{ id: 'pop', primary: true }] })
+    // named by its hash (stash@{n} shifts when another stash is pushed); main.js finds its entry before popping
+    const hash = back.stashes[0].hash
+    expect(offer).toMatchObject({ id: 'stash:' + hash, detail: 'stash@{0}', actions: [{ id: 'pop', primary: true }] })
     const pop = M.reduce(back, ev('action', { itemId: offer.id, actionId: 'pop' })).effects
-    expect(pop).toEqual([{ type: 'run', args: ['stash', 'pop', 'stash@{0}'] }])
+    expect(pop).toEqual([{ type: 'popStash', hash }])
     expect(M.reduce(back, ev('open', { itemId: offer.id })).effects).toEqual(pop)
     expect(M.reduce(back, ev('select', { itemId: offer.id })).effects).toEqual([])
     expect(M.reduce(back, ev('action', { itemId: offer.id, actionId: 'other' })).effects).toEqual([])
@@ -213,7 +219,8 @@ describe('git plugin model: switching with changes, set aside, worktrees, PR, pu
     expect(M.reduce(s, ev('action', { itemId: id, actionId: 'openWorktree' })).effects).toEqual([{ type: 'openProject', path }])
     expect(M.reduce(s, ev('open', { itemId: id })).effects).toEqual([{ type: 'openProject', path }])
     expect(M.reduce(s, ev('select', { itemId: id })).effects).toEqual([])
-    expect(M.reduce(s, ev('menu', { itemId: id, actionId: 'removeWorktree' })).effects).toEqual([{ type: 'run', args: ['worktree', 'remove', path] }])
+    // asked first: the worktree's ignored files go with it
+    expect(M.reduce(s, ev('menu', { itemId: id, actionId: 'removeWorktree' })).effects).toEqual([{ type: 'confirmRun', title: expect.stringContaining(path), ok: 'Supprimer', args: ['worktree', 'remove', path] }])
     expect(M.reduce(s, ev('menu', { itemId: id, actionId: 'x' })).effects).toEqual([])
     // a branch with a worktree opens it; another gets one next to the repository
     expect(M.reduce(s, ev('menu', { itemId: 'local:feature', actionId: 'worktree' })).effects).toEqual([{ type: 'openProject', path: s.worktrees.find((w: any) => w.branch === 'feature').path }])

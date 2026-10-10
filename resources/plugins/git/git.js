@@ -111,10 +111,10 @@ function parseWorktrees(text) {
   return out
 }
 
-const STASH_FORMAT = '%gd%x1f%s'
-/** `git stash list --format=<STASH_FORMAT>` → [{ ref, message }] */
+const STASH_FORMAT = '%gd%x1f%H%x1f%s'
+/** `git stash list --format=<STASH_FORMAT>` → [{ ref, hash, message }]; the ref (stash@{n}) shifts, the hash does not */
 function parseStashes(text) {
-  return text.split('\n').filter((l) => l.includes('\x1f')).map((l) => { const [ref, ...rest] = l.split('\x1f'); return { ref, message: rest.join('\x1f') } })
+  return text.split('\n').filter((l) => l.includes('\x1f')).map((l) => { const [ref, hash, ...rest] = l.split('\x1f'); return { ref, hash, message: rest.join('\x1f') } })
 }
 
 /** The message our switch puts on what it sets aside, and the stash holding it for `branch` (newest first). */

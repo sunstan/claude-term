@@ -222,7 +222,13 @@ export class PluginHost {
       if (method === 'process.exec') {
         if (typeof a?.file !== 'string' || !Array.isArray(a.args) || a.args.some((x: unknown) => typeof x !== 'string')) throw new Error('exec(file, args[]) expected')
         const cwd = typeof a.cwd === 'string' ? a.cwd : undefined
-        return { value: await new Promise((res) => execFile(a.file, a.args, { cwd, maxBuffer: 8_000_000 }, (err, stdout, stderr) => res({ code: err ? (typeof (err as any).code === 'number' ? (err as any).code : 1) : 0, stdout: String(stdout), stderr: String(stderr) }))) }
+        // nothing waits on a question no one sees (credentials, an ssh passphrase), nor runs for ever: 2 min by default, 10 at most
+        const timeout = Math.min(600_000, Math.max(1000, typeof a.timeout === 'number' ? a.timeout : 120_000))
+        const env = { ...process.env, GIT_TERMINAL_PROMPT: '0', GCM_INTERACTIVE: 'never', ...(process.env.GIT_SSH_COMMAND ? {} : { GIT_SSH_COMMAND: 'ssh -o BatchMode=yes' }) }
+        return { value: await new Promise((res) => execFile(a.file, a.args, { cwd, env, timeout, maxBuffer: 8_000_000 }, (err, stdout, stderr) => {
+          const killed = !!(err as any)?.killed
+          res({ code: err ? (typeof (err as any).code === 'number' ? (err as any).code : 1) : 0, stdout: String(stdout), stderr: String(stderr) + (killed ? `\n(arrêté après ${timeout / 1000} s)` : '') })
+        })) }
       }
       if (method === 'workspace.selection') return { value: (await this.ask('selection')) ?? { text: '', file: null, source: null } }
       if (method === 'ui.prompt') {

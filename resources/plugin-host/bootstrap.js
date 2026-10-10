@@ -75,7 +75,7 @@
       show: (id) => call('terminal.show', { id }),
     },
     process: {
-      exec: (file, args, opts) => callAsync('process.exec', { file, args: args || [], cwd: opts && opts.cwd }),
+      exec: (file, args, opts) => callAsync('process.exec', { file, args: args || [], cwd: opts && opts.cwd, timeout: opts && opts.timeout }),
     },
     claude: {
       insertPrompt: (text, opts) => call('claude.insertPrompt', { text, send: !!(opts && opts.send) }),
