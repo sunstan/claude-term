@@ -86,6 +86,9 @@ Handoff for the next session. Design: `docs/DESIGN.md`. Working rules: `CLAUDE.m
   draft release → 3 platforms → published when all succeed. First release: v2.0.0.
 - **App icon**: new logo (`build/src/logo.svg`, 800 px full bleed) placed on the macOS grid in
   `build/src/icon.svg` (824 px body, 100 px margin on 1024); `build/icon.png` / `icon.icns` generated from it.
+- **Mémo** (2026-10-10): left island per project, tabs Liens (add, edit, reorder, drop a link from the browser) and
+  Notes (personal Markdown notes in userData, project files pinned from the explorer's menu or by a drop); the right
+  bar's Mémo groups every project's links and notes, read only.
 - **Tests**: 72 (vitest). UI checked through `scripts/ui.ts` (CDP) + screenshots.
 
 ## Open / next

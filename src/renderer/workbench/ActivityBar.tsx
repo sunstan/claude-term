@@ -31,6 +31,7 @@ const LEFT: { id: LeftActivity; title: string; action: string; icon: () => React
   { id: 'mcp', title: 'MCP', action: 'app.mcp', icon: () => Icons.plug() },
   { id: 'plugins', title: 'Plugins', action: 'app.plugins', icon: () => Icons.puzzle() },
   { id: 'run', title: 'Exécuteurs', action: 'app.run', icon: () => Icons.play() },
+  { id: 'memo', title: 'Mémo du projet', action: 'app.memo', icon: () => Icons.notebook() },
 ]
 /** The app's right panels (the palette lists them too). */
 export const RIGHT: { id: RightActivity; title: string; icon: () => React.ReactElement }[] = [
@@ -38,6 +39,7 @@ export const RIGHT: { id: RightActivity; title: string; icon: () => React.ReactE
   { id: 'process', title: 'Process Claude', icon: () => Icons.cpu() },
   { id: 'history', title: 'Historique (toutes les sessions)', icon: () => Icons.clock() },
   { id: 'skills', title: 'Skills perso et plugins', icon: () => Icons.sparkle() },
+  { id: 'memo', title: 'Mémos (tous les projets)', icon: () => Icons.notebook() },
 ]
 
 export function LeftActivityBar() {

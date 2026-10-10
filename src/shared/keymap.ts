@@ -28,6 +28,8 @@ export const ACTIONS: KeyAction[] = [
   { id: 'app.mcp', scope: 'general', label: 'MCP', default: 'Mod+5' },
   { id: 'app.plugins', scope: 'general', label: 'Plugins', default: 'Mod+6', vscode: 'Mod+Shift+X' },
   { id: 'app.run', scope: 'general', label: 'Exécuteurs', default: 'Mod+7', vscode: 'Mod+Shift+D' },
+  // no default: ⌘1–⌘9 are taken; bound in the settings, or from the palette
+  { id: 'app.memo', scope: 'general', label: 'Mémo du projet', default: '' },
   { id: 'app.git', scope: 'general', label: 'Git', default: 'Mod+9', vscode: 'Ctrl+Shift+G' },
   { id: 'app.commit', scope: 'general', label: 'Commit', default: 'Mod+K', vscode: '' },
   // terminal (while it has the focus; its own keys, so not limited to what terminals leave to the app)

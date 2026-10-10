@@ -4,6 +4,7 @@ import type { DirEntry, FileOpResult } from '@shared/ipc'
 import { Icons } from './icons'
 import { FileIcon } from './FileIcon'
 import { useWorkbench, type Project } from '@/stores/workbench'
+import { pinFile } from '@/stores/memo'
 import { ContextMenu, type MenuItem } from './Menu'
 import { t as tr } from '@/i18n'
 
@@ -122,7 +123,11 @@ export function FileTree({ project, root }: { project: Project; root: string }) 
       { label: tr(mac ? 'Afficher dans le Finder' : "Afficher dans l'explorateur"), onSelect: () => window.ct.app.revealInFinder(where) },
       { label: tr('Copier le chemin'), onSelect: () => navigator.clipboard.writeText(where) },
     ]
-    if (entry && !entry.isDir) return [{ label: tr('Ouvrir'), onSelect: () => openFile(project.id, entry.path) }, ...general, ...fileOps]
+    if (entry && !entry.isDir) return [
+      { label: tr('Ouvrir'), onSelect: () => openFile(project.id, entry.path) },
+      ...(project.root ? [{ label: tr('Épingler dans le mémo'), icon: Icons.pin(13), onSelect: () => pinFile(project.root!, entry.path) }] : []),
+      ...general, ...fileOps,
+    ]
     return [
       { label: tr('Nouvel onglet Claude ici'), icon: Icons.claude(13), onSelect: () => newTab(project.id, 'claude', where) },
       { label: tr('Nouveau shell ici'), icon: Icons.terminal(13), onSelect: () => newTab(project.id, 'shell', where) },

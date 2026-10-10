@@ -14,6 +14,7 @@ import { HookHub } from './services/hooks'
 import { FileService, DirWatcher } from './services/files'
 import { FileOps } from './services/file-ops'
 import { ProjectLinks } from './services/links'
+import { MemoStore } from './services/memo'
 import { Skills } from './services/skills'
 import { Mcp } from './services/mcp'
 import { scanClaudeProcesses } from './services/process'
@@ -30,7 +31,7 @@ import { NPM_LATEST, STATUS_URL, parseStatusPage } from '@shared/claude-info'
 import { PluginStore, type ApprovalRequest } from './services/plugin-store'
 import { catalogueItems, type Catalogue, type RegistryEntry } from '@shared/plugin-registry'
 import { PLUGIN_PERMISSIONS, type PluginPermission } from '@shared/plugins'
-import { opensInDefaultApp } from '@shared/external'
+import { isWebUrl, opensInDefaultApp } from '@shared/external'
 import type { DirEntry } from '@shared/ipc'
 
 // One packaged instance: a second one would drain the same hook spool (userData/events) and take the first one's
@@ -63,6 +64,7 @@ let win: BrowserWindow | null = null
 const send = (channel: string, payload: unknown) => { if (win && !win.isDestroyed()) win.webContents.send(channel, payload) }
 
 const links = new ProjectLinks(app.getPath('userData'))
+const memo = new MemoStore(app.getPath('userData'), (p) => shell.trashItem(p))
 const ptys = new PtyService(() => settings.get(), (id, data) => send('pty:data', { id, data }), (id, code) => send('pty:exit', { id, code }), links)
 
 // pty
@@ -206,6 +208,13 @@ ipcMain.handle('hooks:set', (_e, on: boolean) => hooks.setInstalled(on))
 const ok = (fn: () => unknown) => { try { const r = fn(); return { ok: true, ...(typeof r === 'string' ? { path: r } : {}) } } catch (e) { return { ok: false, error: (e as Error).message } } }
 ipcMain.handle('links:load', (_e, root: string) => links.load(root))
 ipcMain.handle('links:save', (_e, { root, links: l }) => ok(() => links.save(root, l)))
+ipcMain.handle('memo:load', (_e, root: string) => memo.load(root))
+ipcMain.handle('memo:list', () => memo.list())
+ipcMain.handle('memo:saveLinks', (_e, { root, links: l }) => ok(() => memo.saveLinks(root, l)))
+ipcMain.handle('memo:savePins', (_e, { root, pins }) => ok(() => memo.savePins(root, pins)))
+ipcMain.handle('memo:newNote', (_e, { root, name }) => ok(() => memo.newNote(root, name)))
+ipcMain.handle('memo:renameNote', (_e, { root, path, name }) => ok(() => memo.renameNote(root, path, name)))
+ipcMain.handle('memo:deleteNote', async (_e, { root, path }) => { try { await memo.deleteNote(root, path); return { ok: true } } catch (e) { return { ok: false, error: (e as Error).message } } })
 const skills = new Skills()
 ipcMain.handle('skills:project', (_e, root: string) => skills.project(root))
 ipcMain.handle('skills:linked', (_e, root: string) => links.load(root).flatMap((l) => skills.project(l.path, 'linked')))
@@ -366,6 +375,10 @@ ipcMain.handle('app:pickFolder', async () => {
   const r = await dialog.showOpenDialog(win!, { properties: ['openDirectory', 'createDirectory', 'showHiddenFiles'] })
   return r.canceled ? null : r.filePaths[0]
 })
+ipcMain.handle('app:pickFile', async (_e, dir?: string) => {
+  const r = await dialog.showOpenDialog(win!, { properties: ['openFile', 'showHiddenFiles'], ...(typeof dir === 'string' && isAbsolute(dir) ? { defaultPath: dir } : {}) })
+  return r.canceled ? null : r.filePaths[0]
+})
 // files the editor cannot show: their default app when it only views them, otherwise their folder (opening a
 // program or a script would run it)
 ipcMain.on('app:openExternal', (_e, p: string) => {
@@ -378,8 +391,8 @@ ipcMain.on('app:setOverlay', (_e, { dataUrl, label }: { dataUrl: string | null; 
   const img = typeof dataUrl === 'string' && dataUrl.startsWith('data:image/png;base64,') ? nativeImage.createFromDataURL(dataUrl) : null
   win.setOverlayIcon(img, typeof label === 'string' ? label : '')
 })
-// web links go to the default browser (https only)
-ipcMain.on('app:openUrl', (_e, url: string) => { if (/^https:\/\//.test(url)) shell.openExternal(url) })
+// web and mail links go to the default browser or mail app (http, https, mailto; never file: or an app protocol)
+ipcMain.on('app:openUrl', (_e, url: string) => { if (typeof url === 'string' && isWebUrl(url)) shell.openExternal(url) })
 ipcMain.on('app:reveal', (_e, p: string) => { shell.showItemInFolder(p) })
 // macOS Quick Look panel on a file or folder (Space in the explorer, like the Finder)
 ipcMain.on('app:quickLook', (_e, p: string) => { if (process.platform === 'darwin' && typeof p === 'string' && existsSync(p)) win?.previewFile(p) })

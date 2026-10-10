@@ -14,6 +14,7 @@ import { HistoryIsland } from './islands/History'
 import { PluginViewIsland } from './PluginView'
 import { PluginsIsland } from './islands/Plugins'
 import { RunIsland } from './islands/Run'
+import { MemoIsland, MemoAllIsland } from './islands/Memo'
 import { usePlugins } from '@/stores/plugins'
 
 function PluginViews({ activity }: { activity: string }) {
@@ -55,6 +56,7 @@ export function LeftSidebar({ project }: { project: Project }) {
       )}
       {activity === 'plugins' && <PluginsIsland />}
       {activity === 'run' && <RunIsland project={project} />}
+      {activity === 'memo' && project.root && <MemoIsland project={project} />}
       {activity.includes(':') && <PluginViews activity={activity} />}
     </div>
     <Gutter axis="x" className="left" onDrag={(d) => setWidth((w) => Math.max(180, Math.min(600, w + d)))} />
@@ -74,6 +76,7 @@ export function RightSidebar() {
       {activity === 'claude' && <ClaudeIsland />}
       {activity === 'process' && <ProcessIsland />}
       {activity === 'history' && <HistoryIsland scope="all" />}
+      {activity === 'memo' && <MemoAllIsland />}
       {activity.includes(':') && <PluginViews activity={activity} />}
       {activity === 'skills' && (
         <VStack id="skills" collapsed={pluginsCollapsed}

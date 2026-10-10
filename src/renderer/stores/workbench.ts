@@ -58,8 +58,8 @@ export interface Project {
   selectedFolder: string
 }
 
-export type LeftActivity = 'explorer' | 'search' | 'history' | 'skills' | 'mcp' | 'plugins' | 'run' | (string & {})
-export type RightActivity = 'claude' | 'process' | 'history' | 'skills' | (string & {})
+export type LeftActivity = 'explorer' | 'search' | 'history' | 'skills' | 'mcp' | 'plugins' | 'run' | 'memo' | (string & {})
+export type RightActivity = 'claude' | 'process' | 'history' | 'skills' | 'memo' | (string & {})
 
 interface Workbench {
   theme: ResolvedTheme | null

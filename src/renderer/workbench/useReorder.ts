@@ -1,13 +1,17 @@
 import { useState, type DragEvent } from 'react'
 
 /**
- * Drag and drop reordering of a row of tabs. `kind` keeps rows apart (a project tab cannot land among the center
- * tabs); the drop side follows the pointer (left / right half of the target). Spread `props(id)` on each tab.
+ * Drag and drop reordering of a row of tabs (axis x) or a list (axis y). `kind` keeps rows apart (a project tab cannot
+ * land among the center tabs); the drop side follows the pointer (left / right, or top / bottom half of the target).
+ * Spread `props(id)` on each item.
  */
-export function useReorder(kind: string, onMove: (from: string, to: string, place: 'before' | 'after') => void) {
+export function useReorder(kind: string, onMove: (from: string, to: string, place: 'before' | 'after') => void, axis: 'x' | 'y' = 'x') {
   const type = 'application/x-claudeterm-' + kind
   const [over, setOver] = useState<{ id: string; place: 'before' | 'after' } | null>(null)
-  const side = (e: DragEvent<HTMLElement>) => { const r = e.currentTarget.getBoundingClientRect(); return e.clientX < r.left + r.width / 2 ? 'before' as const : 'after' as const }
+  const side = (e: DragEvent<HTMLElement>) => {
+    const r = e.currentTarget.getBoundingClientRect()
+    return (axis === 'x' ? e.clientX < r.left + r.width / 2 : e.clientY < r.top + r.height / 2) ? 'before' as const : 'after' as const
+  }
   const props = (id: string) => ({
     draggable: true,
     onDragStart: (e: DragEvent<HTMLElement>) => { e.dataTransfer.setData(type, id); e.dataTransfer.effectAllowed = 'move' },

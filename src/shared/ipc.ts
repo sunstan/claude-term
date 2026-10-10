@@ -3,6 +3,7 @@ import type { ThemeSpec, ResolvedTheme } from './theme'
 import type { ToolEvent } from './claude-format'
 import { DEFAULT_REGISTRY, type Catalogue } from './plugin-registry'
 import type { UpdateState } from './update'
+import type { MemoLink, ProjectMemo } from './memo'
 import type { UsageSnapshot } from './usage'
 import type { ServiceStatus } from './claude-info'
 
@@ -288,6 +289,18 @@ export interface CtApi {
     load(root: string): Promise<LinkedProject[]>
     save(root: string, links: LinkedProject[]): Promise<{ ok: boolean; error?: string }>
   }
+  /** The Mémo of each project (links, notes, pinned files), kept in the app's data */
+  memo: {
+    load(root: string): Promise<ProjectMemo>
+    /** every project with something in its Mémo */
+    list(): Promise<ProjectMemo[]>
+    saveLinks(root: string, links: MemoLink[]): Promise<{ ok: boolean; error?: string }>
+    savePins(root: string, pins: string[]): Promise<{ ok: boolean; error?: string }>
+    /** the new note's path */
+    newNote(root: string, name: string): Promise<{ ok: boolean; error?: string; path?: string }>
+    renameNote(root: string, path: string, name: string): Promise<{ ok: boolean; error?: string; path?: string }>
+    deleteNote(root: string, path: string): Promise<{ ok: boolean; error?: string }>
+  }
   skills: {
     project(root: string): Promise<SkillInfo[]>
     linked(root: string): Promise<SkillInfo[]>
@@ -397,8 +410,10 @@ export interface CtApi {
     /** "Enregistrer" | "Ne pas enregistrer" | "Annuler" → 'save' | 'discard' | 'cancel' */
     confirmSave(name: string): Promise<'save' | 'discard' | 'cancel'>
     pickFolder(): Promise<string | null>
+    /** a file to open, the dialog starting in `dir` */
+    pickFile(dir?: string): Promise<string | null>
     openExternal(path: string): void
-    /** an https link in the default browser */
+    /** a web (http, https) or mail link in the default browser or mail app */
     openUrl(url: string): void
     /** Windows taskbar overlay (the count of tabs waiting, drawn by the renderer as a PNG data URL); null clears it */
     setOverlay(dataUrl: string | null, label: string): void

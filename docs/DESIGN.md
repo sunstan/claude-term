@@ -69,7 +69,11 @@ Renderer ↔ main through a typed IPC contract (`src/shared/ipc.ts`), exposed by
   (`shared/runnables.ts`: npm scripts with workspaces, make targets, cargo, go, python, shell scripts; "En cours" with
   stop / show) and Tests (Vitest, Jest, pytest; results from the runs' machine reports kept in userData). The editor's gutter ▶ comes from `shared/run-lines.ts` (package.json scripts, Makefile
   targets, shell scripts, shell commands of Markdown code blocks) and runs through the same store. Errors (project's
-  tsc / ESLint) and TODO are tabs of the center bottom block (`shared/problems.ts`, `services/problems.ts`). Click active = collapse. The left bar and sidebar are **project-bound**:
+  tsc / ESLint) and TODO are tabs of the center bottom block (`shared/problems.ts`, `services/problems.ts`). **Mémo**
+  (no default shortcut): tabs Liens (name + URL, http / https / mailto only, opened in the browser) and Notes (Markdown
+  notes in `userData/memo/<hash of root>/`, opened in the editor, and project files pinned there); links and pins in
+  `userData/memo.json` by root, nothing in the project (`services/memo.ts`, `shared/memo.ts`). The right bar's Mémo
+  lists every project's, read only. Click active = collapse. The left bar and sidebar are **project-bound**:
   hidden while the active project has no folder (welcome screen).
 - **App settings**: gear button at the bottom of the right activity bar on every platform (the
   top-right corner belongs to the native caption buttons on Windows/Linux). Opens the Settings modal.

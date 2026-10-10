@@ -74,6 +74,15 @@ const api: CtApi = {
     load: (root) => ipcRenderer.invoke('links:load', root),
     save: (root, links) => ipcRenderer.invoke('links:save', { root, links }),
   },
+  memo: {
+    load: (root) => ipcRenderer.invoke('memo:load', root),
+    list: () => ipcRenderer.invoke('memo:list'),
+    saveLinks: (root, links) => ipcRenderer.invoke('memo:saveLinks', { root, links }),
+    savePins: (root, pins) => ipcRenderer.invoke('memo:savePins', { root, pins }),
+    newNote: (root, name) => ipcRenderer.invoke('memo:newNote', { root, name }),
+    renameNote: (root, path, name) => ipcRenderer.invoke('memo:renameNote', { root, path, name }),
+    deleteNote: (root, path) => ipcRenderer.invoke('memo:deleteNote', { root, path }),
+  },
   skills: {
     project: (root) => ipcRenderer.invoke('skills:project', root),
     linked: (root) => ipcRenderer.invoke('skills:linked', root),
@@ -164,6 +173,7 @@ const api: CtApi = {
   app: {
     confirmSave: (name) => ipcRenderer.invoke('app:confirmSave', name),
     pickFolder: () => ipcRenderer.invoke('app:pickFolder'),
+    pickFile: (dir) => ipcRenderer.invoke('app:pickFile', dir),
     openExternal: (path) => ipcRenderer.send('app:openExternal', path),
     openUrl: (url) => ipcRenderer.send('app:openUrl', url),
     setOverlay: (dataUrl, label) => ipcRenderer.send('app:setOverlay', { dataUrl, label }),

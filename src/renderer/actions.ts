@@ -16,7 +16,7 @@ export function shortcutLabel(id: string): string {
 }
 export const withShortcut = (text: string, id: string) => { const k = shortcutLabel(id); return k ? `${text} (${k})` : text }
 
-const PANELS: Record<string, LeftActivity> = { 'app.explorer': 'explorer', 'app.search': 'search', 'app.history': 'history', 'app.skills': 'skills', 'app.mcp': 'mcp', 'app.plugins': 'plugins', 'app.run': 'run' }
+const PANELS: Record<string, LeftActivity> = { 'app.explorer': 'explorer', 'app.search': 'search', 'app.history': 'history', 'app.skills': 'skills', 'app.mcp': 'mcp', 'app.plugins': 'plugins', 'app.run': 'run', 'app.memo': 'memo' }
 
 /** General (app-level) actions triggered by the keymap. Returns false when the action does not apply. */
 export function runAppAction(id: string): boolean {
