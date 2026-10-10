@@ -633,3 +633,4 @@ input[type=checkbox]:disabled { opacity: .4; }
 .pdeco.tone-ok::before { background: var(--ct-badge-ok); }
 .pdeco.tone-warn::before { background: var(--ct-badge-warn); }
 .pdeco.tone-error::before { background: var(--ct-badge-error); }
+.badge.tabname { display: inline-flex; align-items: center; gap: 3px; background: var(--ct-hover-bg); color: var(--ct-text); margin-right: 6px; flex: none; text-transform: none; letter-spacing: 0; }

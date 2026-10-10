@@ -182,6 +182,15 @@ export const useWorkbench = create<Workbench>((set, get) => ({
     window.ct.themes.onChange((theme) => set({ theme }))
     window.ct.settings.onChange((settings) => set({ settings }))
     window.ct.claude.onUpdate(({ tabId, state, newEvents }) => {
+      const before = get().projects.flatMap((p) => p.tabs).find((t) => t.id === tabId)
+      // a tab binding a session: a named tab gives the session its name, an unnamed one takes the session's
+      if (before && state.sessionId && state.sessionId !== before.session?.sessionId) {
+        if (before.customTitle) window.ct.claude.setSessionName(state.sessionId, before.customTitle)
+        else window.ct.claude.sessionName(state.sessionId).then((name) => {
+          const now = get().projects.flatMap((p) => p.tabs).find((t) => t.id === tabId)
+          if (name && now && !now.customTitle && now.session?.sessionId === state.sessionId) patchTab(set, tabId, () => ({ customTitle: name }))
+        })
+      }
       // the session's title once it has one; until then the tab keeps its folder name
       patchTab(set, tabId, () => ({ session: state, ...(state.title ? { title: state.title } : {}) }))
       if (newEvents.length) get().clearAttention(tabId)
@@ -257,6 +266,9 @@ export const useWorkbench = create<Workbench>((set, get) => ({
     const { id: ptyId, error } = await window.ct.pty.create({ cwd: dir, kind, projectRoot: p.root ?? undefined, resume, tabId: id })
     const tab: Tab = { id, kind, title: name(dir), cwd: dir, ptyId, alive: !error, busy: false, lastCommand: '', lastExit: null, claudeRunning: false }
     if (error) tab.title += ' (erreur)'
+    // a resumed session reopens under the name of the tab it ran in
+    const kept = resume ? await window.ct.claude.sessionName(resume) : null
+    if (kept) tab.customTitle = kept
     set((s) => ({ projects: s.projects.map((x) => (x.id === projectId ? { ...x, tabs: [...x.tabs, tab], currentTabId: tab.id } : x)), lastClaudeTab: kind === 'claude' ? { ...s.lastClaudeTab, [projectId]: tab.id } : s.lastClaudeTab }))
     if (error) console.error(error)
     else if (kind === 'claude') window.ct.claude.track(tab.id, dir, resume ? { resume } : undefined)
@@ -511,7 +523,13 @@ export const useWorkbench = create<Workbench>((set, get) => ({
     const cwd = tabPathShell() === 'wsl' ? windowsPathFromWsl(reported, s?.wslDistro || undefined) : reported
     patchTab(set, tabId, (t) => (t.cwd === cwd ? {} : { cwd, title: name(cwd) }))
   },
-  renameTab(tabId, title) { const v = title.trim().slice(0, 80); patchTab(set, tabId, () => ({ customTitle: v || undefined })) },
+  renameTab(tabId, title) {
+    const v = title.trim().slice(0, 80)
+    patchTab(set, tabId, () => ({ customTitle: v || undefined }))
+    // its session keeps the name (History, resume); a cleared name is cleared there too
+    const session = get().projects.flatMap((p) => p.tabs).find((t) => t.id === tabId)?.session?.sessionId
+    if (session) window.ct.claude.setSessionName(session, v || null)
+  },
   claudeTitle(tabId, title) {
     const activity = claudeActivity(title)
     const s = get()

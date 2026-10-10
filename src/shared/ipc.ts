@@ -84,6 +84,8 @@ export interface SessionInfo {
   projectPath: string
   messageCount: number
   gitBranch: string
+  /** the name of the tab it ran in (renamed by the user), kept by the app */
+  tabName?: string
 }
 
 export interface PlanInfo { path: string; title: string; modified: number }
@@ -300,6 +302,9 @@ export interface CtApi {
     allSessions(): Promise<SessionInfo[]>
     hasSessions(cwd: string): Promise<boolean>
     deleteSession(s: SessionInfo): Promise<void>
+    /** the name of the tab a session ran in; set when its tab is renamed or binds it */
+    sessionName(id: string): Promise<string | null>
+    setSessionName(id: string, name: string | null): void
     sessionDiff(path: string, backupName: string | null, sessionId: string): Promise<string>
     readText(path: string): Promise<string>
     /** an activity entry in full (its tool input and result, or the text), in the session or one of its sub-agents */

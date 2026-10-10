@@ -34,7 +34,8 @@ import { PluginStore, type ApprovalRequest } from './services/plugin-store'
 import { catalogueItems, type Catalogue, type RegistryEntry } from '@shared/plugin-registry'
 import { PLUGIN_PERMISSIONS, type PluginPermission } from '@shared/plugins'
 import { isWebUrl, opensInDefaultApp } from '@shared/external'
-import type { DirEntry, SkillInfo } from '@shared/ipc'
+import type { DirEntry, SessionInfo, SkillInfo } from '@shared/ipc'
+import { SessionNames } from './services/session-names'
 import type { MCPServer } from '@shared/ipc'
 import { maskServer, unmaskServer } from '@shared/mcp-secrets'
 
@@ -159,8 +160,13 @@ ipcMain.on('claude:track', (_e, { tabId, cwd, opts }) => {
 ipcMain.on('claude:untrack', (_e, { tabId }) => { trackers.get(tabId)?.stop(); trackers.delete(tabId) })
 ipcMain.on('claude:setPlan', (_e, { tabId, path }) => trackers.get(tabId)?.setPlan(path))
 ipcMain.handle('claude:plans', () => claudeData.plans())
-ipcMain.handle('claude:sessions', (_e, cwd: string) => claudeData.sessions(cwd))
-ipcMain.handle('claude:allSessions', () => claudeData.allSessions())
+// each session with the name of the tab it ran in, when it had one
+const sessionNames = new SessionNames(join(app.getPath('userData'), 'session-names.json'))
+const named = (list: SessionInfo[]) => list.map((s) => { const tabName = sessionNames.get(s.id); return tabName ? { ...s, tabName } : s })
+ipcMain.handle('claude:sessions', (_e, cwd: string) => named(claudeData.sessions(cwd)))
+ipcMain.handle('claude:allSessions', () => named(claudeData.allSessions()))
+ipcMain.handle('claude:sessionName', (_e, id: string) => (typeof id === 'string' ? sessionNames.get(id) : null))
+ipcMain.on('claude:setSessionName', (_e, { id, name }: { id: string; name: string | null }) => { if (typeof id === 'string' && id) sessionNames.set(id, typeof name === 'string' ? name : null) })
 ipcMain.handle('claude:hasSessions', (_e, cwd: string) => claudeData.hasSessions(cwd))
 ipcMain.handle('claude:deleteSession', (_e, s) => claudeData.deleteSession(s, (p) => shell.trashItem(p)))
 ipcMain.handle('claude:sessionDiff', (_e, { path, backupName, sessionId }) => claudeData.sessionDiff(path, backupName, sessionId))

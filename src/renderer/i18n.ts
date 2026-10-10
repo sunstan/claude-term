@@ -530,4 +530,5 @@ const EN: Record<string, string> = {
   'Afficher le terminal au lancement': 'Show the terminal on start',
   "Un script lancé depuis le panneau Exécuter passe au premier plan. Désactivé, il démarre dans son onglet sans quitter celui où tu es.": 'A script started from the Run panel comes to the front. Off, it starts in its own tab and you stay where you are.',
   'nom du groupe': 'group name',
+  "Nom de l'onglet où la session a tourné": 'Name of the tab the session ran in',
 }
