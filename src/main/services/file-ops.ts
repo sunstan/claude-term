@@ -77,27 +77,40 @@ export async function transferAll(paths: string[], destDir: string, move: boolea
     replace = c === 'replace'
   }
   const out: OpResult[] = []
+  const replaced: string[] = []
   for (const p of paths) {
     if (replace && taken.includes(p)) {
       const existing = join(destDir, basename(p))
       if (inside(p, existing)) { out.push({ ok: false, error: `« ${basename(existing)} » contient ce qui y va` }); continue }
-      try { await deps.trash(existing) } catch (e) { out.push(err(e)); continue }
+      try { await deps.trash(existing); replaced.push(existing) } catch (e) { out.push(err(e)); continue }
     }
-    out.push(FileOps.transfer(p, destDir, move))
+    const r = FileOps.transfer(p, destDir, move)
+    // the replaced item is in the Trash: say so when the move or copy that was to take its place failed
+    out.push(!r.ok && replaced.includes(join(destDir, basename(p))) ? { ...r, error: `${r.error} (l'élément remplacé est dans la corbeille)` } : r)
   }
-  if (move) deps.log?.push({ kind: 'move', pairs: out.flatMap((r, i): [string, string][] => (r.ok && r.path !== paths[i] ? [[paths[i], r.path]] : [])) })
-  else deps.log?.push({ kind: 'copy', paths: out.flatMap((r) => (r.ok ? [r.path] : [])) })
+  const rep = replaced.length ? { replaced } : {}
+  if (move) deps.log?.push({ kind: 'move', pairs: out.flatMap((r, i): [string, string][] => (r.ok && r.path !== paths[i] ? [[paths[i], r.path]] : [])), ...rep })
+  else deps.log?.push({ kind: 'copy', paths: out.flatMap((r) => (r.ok ? [r.path] : [])), ...rep })
   return out
 }
 
-/** An explorer operation as the undo log keeps it: renames and moves as (from, to) pairs, what was created as paths. */
+/**
+ * An explorer operation as the undo log keeps it: renames and moves as (from, to) pairs, what was created as paths with
+ * the time it was last changed then (an undo leaves alone what changed since); `replaced`: what the operation sent to the
+ * Trash to take its name (an undo cannot bring it back: it says where it is).
+ */
 export type FileOp =
-  | { kind: 'rename' | 'move'; pairs: [string, string][] }
-  | { kind: 'create' | 'copy'; paths: string[] }
+  | { kind: 'rename' | 'move'; pairs: [string, string][]; replaced?: string[] }
+  | { kind: 'create' | 'copy'; paths: string[]; stamps?: number[]; replaced?: string[] }
+
+const stamp = (p: string) => { try { return statSync(p).mtimeMs } catch { return -1 } }
+const within = (p: string, root: string) => { const r = relative(root, p); return r === '' || (!!r && !r.startsWith('..') && !isAbsolute(r)) }
+const pathsOf = (op: FileOp) => ('pairs' in op ? op.pairs.flat() : op.paths)
 
 /**
- * The last explorer operations, undone newest first: a rename or a move goes back (never over a name taken since),
- * what a create or a copy made goes to the Trash. A deletion is not here: it already went to the Trash.
+ * The last explorer operations, undone newest first, for the tree they were made in (an explorer undoes its own, not
+ * another project's): a rename or a move goes back (never over a name taken since), what a create or a copy made goes to
+ * the Trash unless it changed since. A deletion is not here: it already went to the Trash.
  */
 export class UndoLog {
   private ops: FileOp[] = []
@@ -106,28 +119,42 @@ export class UndoLog {
   push(op: FileOp) {
     const n = 'pairs' in op ? op.pairs.length : op.paths.length
     if (!n) return
+    if ('paths' in op) op = { ...op, stamps: op.paths.map(stamp) }
     this.ops.push(op)
     if (this.ops.length > this.max) this.ops.shift()
   }
 
-  peek(): UndoInfo | null {
-    const op = this.ops.at(-1)
+  /** the newest operation made under `root` (every path of it), when a root is given */
+  private last(root?: string): number {
+    for (let i = this.ops.length - 1; i >= 0; i--) if (!root || pathsOf(this.ops[i]).every((p) => within(p, root))) return i
+    return -1
+  }
+
+  peek(root?: string): UndoInfo | null {
+    const op = this.ops[this.last(root)]
     if (!op) return null
     const list = 'pairs' in op ? op.pairs.map(([from]) => from) : op.paths
     return { kind: op.kind, count: list.length, name: basename(list[0]) }
   }
 
-  async undo(): Promise<UndoResult> {
-    const op = this.ops.pop()
-    if (!op) return { moved: [], removed: [], dirs: [], error: 'rien à annuler' }
+  async undo(root?: string): Promise<UndoResult> {
+    const i = this.last(root)
+    if (i < 0) return { moved: [], removed: [], dirs: [], error: 'rien à annuler' }
+    const [op] = this.ops.splice(i, 1)
+    const replacedNote = op.replaced?.length ? ` ; remplacé avant, à la corbeille : ${op.replaced.map((p) => basename(p)).join(', ')}` : ''
     if ('paths' in op) {
-      const removed: string[] = []
-      for (const p of op.paths) if (existsSync(p)) { await this.trash(p); removed.push(p) }
-      return { moved: [], removed, dirs: [...new Set(op.paths.map((p) => dirname(p)))] }
+      const removed: string[] = [], kept: string[] = []
+      for (const [k, p] of op.paths.entries()) {
+        if (!existsSync(p)) continue
+        if (op.stamps && stamp(p) !== op.stamps[k]) { kept.push(basename(p)); continue }
+        try { await this.trash(p); removed.push(p) } catch (e) { kept.push(`${basename(p)} (${String((e as Error)?.message ?? e)})`) }
+      }
+      const error = kept.length ? `modifié depuis ou impossible à mettre à la corbeille, laissé : ${kept.join(', ')}` : undefined
+      return { moved: [], removed, dirs: [...new Set(op.paths.map((p) => dirname(p)))], ...(error || replacedNote ? { error: (error ?? 'annulé') + replacedNote } : {}) }
     }
     const moved: [string, string][] = []
     const dirs = [...new Set(op.pairs.flatMap(([from, to]) => [dirname(from), dirname(to)]))]
-    const stop = (error: string): UndoResult => ({ moved, removed: [], dirs, error })
+    const stop = (error: string): UndoResult => ({ moved, removed: [], dirs, error: error + replacedNote })
     for (const [from, to] of [...op.pairs].reverse()) {
       if (!existsSync(to)) return stop('introuvable : ' + basename(to))
       // a change of case only (rename) finds `from` there on case-insensitive disks
@@ -138,6 +165,6 @@ export class UndoLog {
       } catch (e) { return stop(String((e as Error)?.message ?? e)) }
       moved.push([to, from])
     }
-    return { moved, removed: [], dirs }
+    return { moved, removed: [], dirs, ...(replacedNote ? { error: 'annulé' + replacedNote } : {}) }
   }
 }

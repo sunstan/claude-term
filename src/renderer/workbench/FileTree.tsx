@@ -100,7 +100,7 @@ export function FileTree({ project, root }: { project: Project; root: string }) 
   const setOpen = (p: string, on: boolean) => useExplorer.getState().setOpen(root, p, on)
   const rows = () => [...(ref.current?.querySelectorAll<HTMLElement>('.row[data-path]') ?? [])]
   const focus = () => ref.current?.focus({ preventScroll: true })
-  const refreshUndo = () => { window.ct.fs.undoInfo().then(setUndoInfo) }
+  const refreshUndo = () => { window.ct.fs.undoInfo(root).then(setUndoInfo) }
   useEffect(() => { if (!error) return; const t = setTimeout(() => setError(null), 5000); return () => clearTimeout(t) }, [error])
   // opened folders' rows arrive as each folder is read: the row is looked for a few times
   useEffect(() => {
@@ -177,7 +177,7 @@ export function FileTree({ project, root }: { project: Project; root: string }) 
     setMarked([]); reload(...paths.map(parentOf)); focus()
   }
   const undo = async () => {
-    const r = await window.ct.fs.undo()
+    const r = await window.ct.fs.undo(root)
     for (const [from, to] of r.moved) await useWorkbench.getState().pathMoved(from, to)
     if (r.removed.length) await useWorkbench.getState().pathsRemoved(r.removed)
     setMarked([]); setError(r.error ?? null); reload(...r.dirs); focus()

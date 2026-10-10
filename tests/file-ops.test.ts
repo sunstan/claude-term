@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { existsSync, readFileSync, readdirSync, rmSync } from 'node:fs'
+import { existsSync, readFileSync, readdirSync, rmSync, utimesSync } from 'node:fs'
 import { join } from 'node:path'
 import { TempDir } from './helpers'
 import { FileOps, freeName, transferAll, UndoLog, type ConflictChoice } from '../src/main/services/file-ops'
@@ -121,6 +121,30 @@ describe('file operations', () => {
     for (const n of ['1', '2', '3', '4']) log.push({ kind: 'create', paths: [p(n)] })
     expect([await log.undo(), await log.undo(), await log.undo()].map((r) => r.dirs)).toEqual([[t.path], [t.path], [t.path]])
     expect(log.peek()).toBeNull()
+    t.dispose()
+  })
+
+  it('undoes in the tree it was done in, leaves what changed since, says where a replaced item went', async () => {
+    const t = new TempDir()
+    const p = (...s: string[]) => join(t.path, ...s)
+    const trashed: string[] = []
+    const log = new UndoLog(async (x) => { trashed.push(x); rmSync(x, { recursive: true }) })
+    const a = FileOps.create(p('projA'), 'a.ts', false), b = FileOps.create(p('projB'), 'b.ts', false)
+    if (!a.ok || !b.ok) throw new Error()
+    log.push({ kind: 'create', paths: [a.path] }); log.push({ kind: 'create', paths: [b.path] })
+    // project A's explorer undoes A's create, not B's newer one
+    expect(log.peek(p('projA'))).toMatchObject({ name: 'a.ts' })
+    expect(await log.undo(p('projA'))).toMatchObject({ removed: [a.path] })
+    expect(existsSync(b.path)).toBe(true)
+    // edited since its create: left alone
+    t.write('projB/b.ts', 'written after')
+    utimesSync(b.path, new Date(), new Date(Date.now() + 5000))
+    expect(await log.undo(p('projB'))).toMatchObject({ removed: [], error: expect.stringMatching(/b\.ts/) })
+    expect(existsSync(b.path)).toBe(true)
+    // a copy that replaced an item: the undo says it is in the Trash
+    t.write('src/x.ts', 'new'); t.write('projB/x.ts', 'old')
+    await transferAll([p('src', 'x.ts')], p('projB'), false, { choose: async () => 'replace', trash: async (x) => { rmSync(x) }, log })
+    expect(await log.undo(t.path)).toMatchObject({ removed: [p('projB', 'x.ts')], error: expect.stringMatching(/corbeille : x\.ts/) })
     t.dispose()
   })
 })

@@ -281,8 +281,9 @@ export interface CtApi {
     /** to the Trash after a confirmation dialog; false when cancelled */
     trash(paths: string[]): Promise<boolean>
     /** the explorer operation the next undo reverts (create, rename, move, copy), null when none */
-    undoInfo(): Promise<UndoInfo | null>
-    undo(): Promise<UndoResult>
+    /** the last explorer operation made under `root` (the tree's folder) */
+    undoInfo(root?: string): Promise<UndoInfo | null>
+    undo(root?: string): Promise<UndoResult>
   }
   themes: {
     list(): Promise<ThemeSpec[]>

@@ -121,8 +121,10 @@ ipcMain.handle('fs:transfer', (_e, { paths, dest, move }: { paths: string[]; des
   }
   return transferAll(paths, dest, !!move, { choose, trash: (p) => shell.trashItem(p), log: undoLog })
 })
-ipcMain.handle('fs:undoInfo', () => undoLog.peek())
-ipcMain.handle('fs:undo', () => undoLog.undo())
+// each explorer undoes what was done in its own tree
+const rootArg = (r: unknown) => (typeof r === 'string' && isAbsolute(r) ? r : undefined)
+ipcMain.handle('fs:undoInfo', (_e, root?: string) => undoLog.peek(rootArg(root)))
+ipcMain.handle('fs:undo', async (_e, root?: string) => { try { return await undoLog.undo(rootArg(root)) } catch (e) { return { moved: [], removed: [], dirs: [], error: String((e as Error)?.message ?? e) } } })
 ipcMain.handle('fs:trash', async (_e, paths: string[]) => {
   if (!Array.isArray(paths) || !paths.length || !paths.every(safe)) return false
   const what = paths.length === 1 ? `« ${basename(paths[0])} »` : `ces ${paths.length} éléments`
