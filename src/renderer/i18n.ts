@@ -479,4 +479,5 @@ const EN: Record<string, string> = {
   'Démarrage…': 'Starting…',
   'Fichier introuvable ou illisible': 'File not found or unreadable',
   'Retour de {agent}': 'Back from {agent}',
+  'créé': 'created',
 }

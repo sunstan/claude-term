@@ -51,7 +51,8 @@ export interface SessionState {
   events: ToolEvent[]
   /** absolute path → number of accesses */
   files: Record<string, number>
-  backups: Record<string, { name: string; version: number }>
+  /** earliest backup of each file the session changed; name null: the session created it */
+  backups: Record<string, { name: string | null; version: number }>
   bashDiffs: Record<string, string[]>
   inputTokens: number
   outputTokens: number

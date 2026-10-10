@@ -235,7 +235,8 @@ function FilesView({ tab }: { tab: Tab }) {
           <div key={p} className={'frow' + (p === current ? ' sel' : '')} onClick={() => setSelected(p)} onDoubleClick={() => openFile(projectId, p)} title={p}>
             <FileIcon path={p} size={14} />
             <span className="name">{p.split(/[\\/]/).pop()}</span>
-            <span className="rel">{short(p).replace(/[^/]*$/, '')}</span>
+            <span className="rel">{short(p).replace(/[^\\/]*$/, '')}</span>
+            {s.backups[p]?.name === null && <span className="badge dim">{t('créé')}</span>}
             {stats[p] && <span className="stat"><b className="add">+{stats[p][0]}</b> <b className="del">−{stats[p][1]}</b></span>}
             {!isModified(p) && s.files[p] > 0 && <span className="muted">{s.files[p]}×</span>}
           </div>

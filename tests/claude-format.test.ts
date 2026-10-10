@@ -132,6 +132,16 @@ describe('transcript parsing', () => {
     expect(entryDetail(lines.slice(0, 2), 'a1:1')).toMatchObject({ kind: 'tool', output: '' })
     expect(entryDetail(lines, 'nope:0')).toBeNull()
   })
+  it('reads file-history deltas, files created by the session included', () => {
+    const win = { plansDir: 'C:\\Users\\j\\.claude\\plans', home: 'C:\\Users\\j' }
+    const u = parseTranscript(jsonl([
+      { type: 'file-history-delta', trackingPath: 'docs\\NEW.md', backup: { backupFileName: null, version: 1, realParentDir: 'C:\\p\\docs' } },
+      { type: 'file-history-delta', trackingPath: 'docs\\OLD.md', backup: { backupFileName: 'o@v2', version: 2, realParentDir: 'C:\\p\\docs' } },
+      { type: 'file-history-delta', trackingPath: 'docs\\OLD.md', backup: { backupFileName: 'o@v1', version: 1, realParentDir: 'C:\\p\\docs' } },
+      { type: 'file-history-delta', trackingPath: 'x.md', backup: { version: 1 } },
+    ]), win)
+    expect(u.backups).toEqual({ 'C:\\p\\docs\\NEW.md': { name: null, version: 1 }, 'C:\\p\\docs\\OLD.md': { name: 'o@v1', version: 1 } })
+  })
   it('parses bash edit diffs', () => {
     const u = parseTranscript(jsonl([{ type: 'user', message: { content: 'x' }, toolUseResult: { bashEditDiff: { files: [{ filePath: '/p/f', hunks: [{ oldStart: 1, oldLines: 1, newStart: 1, newLines: 1, lines: ['-a', '+b'] }] }] } } }]), opts)
     expect(u.bashDiffs['/p/f'][0]).toBe('@@ -1,1 +1,1 @@\n-a\n+b\n')

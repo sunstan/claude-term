@@ -39,8 +39,8 @@ export interface TranscriptUpdate {
   effort?: string
   startedTools: { id: string; name: string; detail: string }[]
   finishedTools: string[]
-  /** absolute path → earliest backup (file-history-snapshot records) */
-  backups: Record<string, { name: string; version: number }>
+  /** absolute path → earliest backup (file-history snapshots and deltas); name null: the session created the file */
+  backups: Record<string, { name: string | null; version: number }>
   /** absolute path → unified-diff hunks of edits made through Bash commands */
   bashDiffs: Record<string, string[]>
 }
@@ -90,6 +90,21 @@ export function textOf(content: unknown): string | null {
 }
 
 /**
+ * A tracked file's backup (snapshot entry or delta record); the earliest version is kept: the file before the session
+ * changed it. A null backupFileName means the file did not exist then (the session created it).
+ */
+function addBackup(u: TranscriptUpdate, rel: string, b: any, home: string) {
+  if (!b || (typeof b.backupFileName !== 'string' && b.backupFileName !== null)) return
+  const version = typeof b.version === 'number' ? b.version : 1
+  const segments = rel.split(/[\\/]/)
+  const parent = typeof b.realParentDir === 'string' ? b.realParentDir : joinPath(home, segments.slice(0, -1))
+  const abs = joinPath(parent, segments.slice(-1))
+  const e = u.backups[abs]
+  if (e && e.version <= version) return
+  u.backups[abs] = { name: b.backupFileName, version }
+}
+
+/**
  * Parses complete transcript lines. `plansDir` marks plan files, `home` resolves snapshot paths
  * when the record has no realParentDir.
  */
@@ -108,18 +123,13 @@ export function parseTranscript(lines: string[], opts: { plansDir: string; home:
       case 'file-history-snapshot': {
         const tracked = obj.snapshot?.trackedFileBackups
         if (!tracked || typeof tracked !== 'object') break
-        for (const [rel, b] of Object.entries<any>(tracked)) {
-          if (!b || typeof b.backupFileName !== 'string') continue
-          const version = typeof b.version === 'number' ? b.version : 1
-          const segments = rel.split(/[\\/]/)
-          const parent = typeof b.realParentDir === 'string' ? b.realParentDir : joinPath(opts.home, segments.slice(0, -1))
-          const abs = joinPath(parent, segments.slice(-1))
-          const e = u.backups[abs]
-          if (e && e.version <= version) continue
-          u.backups[abs] = { name: b.backupFileName, version }
-        }
+        for (const [rel, b] of Object.entries<any>(tracked)) addBackup(u, rel, b, opts.home)
         break
       }
+      // newer Claude Code records each tracked file as it changes, one record per file
+      case 'file-history-delta':
+        if (typeof obj.trackingPath === 'string') addBackup(u, obj.trackingPath, obj.backup, opts.home)
+        break
       case 'permission-mode':
         if (typeof obj.permissionMode === 'string') u.permissionMode = obj.permissionMode
         break
