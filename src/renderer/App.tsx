@@ -12,7 +12,7 @@ import { Welcome } from './workbench/Welcome'
 import { SettingsPage } from './workbench/SettingsPage'
 import { setLanguage } from './i18n'
 import { findAction } from '@shared/keymap'
-import { keyEvent, runAppAction, withShortcut } from './actions'
+import { keyEvent, pluginCommandFor, runAppAction, withShortcut } from './actions'
 import { useUpdate } from './stores/update'
 import { watchTaskbarBadge } from './taskbar'
 import { useUsage } from './stores/usage'
@@ -52,6 +52,8 @@ export function App() {
     window.ct.plugins.onStopRun((id) => { const f = tabOfRun(id); if (f?.t.ptyId) window.ct.pty.write(f.t.ptyId, '\x03') })
     window.ct.plugins.onShowRun((id) => { const f = tabOfRun(id); if (f) { const s = useWorkbench.getState(); s.setActiveProject(f.p.id); s.setCurrentTab(f.p.id, f.t.id) } })
     window.ct.plugins.onOpenDiff((r) => { const s = useWorkbench.getState(); if (s.activeProjectId) s.openDiff(s.activeProjectId, r) })
+    window.ct.plugins.onInsertPrompt((r) => { const s = useWorkbench.getState(); if (s.activeProjectId) s.insertPrompt(s.activeProjectId, r.text, { paste: true, send: r.send }) })
+    window.ct.plugins.onQuery(async (q) => { if (q.kind === 'selection') window.ct.plugins.queryReply(q.id, await currentSelection()) })
     if (import.meta.env.DEV || window.ct.debug) (window as any).__ct = useWorkbench
     if (import.meta.env.DEV || window.ct.debug) (window as any).__ct_state = () => {
       const s = useWorkbench.getState()
@@ -74,7 +76,10 @@ export function App() {
       if ((e.target as HTMLElement)?.closest?.('.key-recorder')) return
       const inTerminal = !!(e.target as HTMLElement)?.closest?.('.xterm')
       const hit = findAction(keyEvent(e), st.settings?.keybindings ?? {}, window.ct.platform === 'darwin', { preset: st.settings?.keymapPreset, inTerminal })
-      if (hit && runAppAction(hit.id)) e.preventDefault()
+      if (hit && runAppAction(hit.id)) { e.preventDefault(); return }
+      // then the plugins' commands with a shortcut
+      const cmd = hit ? null : pluginCommandFor(keyEvent(e), inTerminal)
+      if (cmd) { e.preventDefault(); window.ct.plugins.runCommand(cmd.pluginId, cmd.id) }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
@@ -142,4 +147,14 @@ function PromptModal({ req, onDone }: { req: import('@shared/plugins').PromptReq
       </div>
     </div>
   )
+}
+
+/** What a plugin reads as the selection: the editor's when a file is shown, else the shown terminal's. */
+async function currentSelection(): Promise<{ text: string; file: string | null; source: 'editor' | 'terminal' | null }> {
+  const s = useWorkbench.getState()
+  const p = s.projects.find((x) => x.id === s.activeProjectId)
+  const t = p?.tabs.find((x) => x.id === p.currentTabId)
+  if (t?.kind === 'file' && t.path) return { text: (await import('./editor/EditorHost')).editorSelection(), file: t.path, source: 'editor' }
+  if (t && (t.kind === 'shell' || t.kind === 'claude')) return { text: (await import('./terminal/TerminalView')).terminalSelection(t.id), file: null, source: 'terminal' }
+  return { text: '', file: null, source: null }
 }

@@ -32,6 +32,7 @@
       onDidChangeProject: (cb) => on('project', cb),
       openFile: (path) => call('workspace.openFile', { path }),
       openDiff: (req) => call('workspace.openDiff', req),
+      selection: () => callAsync('workspace.selection'),
       fs: {
         exists: (path) => call('fs.exists', { path }),
         read: (path) => call('fs.read', { path }),
@@ -68,6 +69,13 @@
     },
     process: {
       exec: (file, args, opts) => callAsync('process.exec', { file, args: args || [], cwd: opts && opts.cwd }),
+    },
+    claude: {
+      insertPrompt: (text, opts) => call('claude.insertPrompt', { text, send: !!(opts && opts.send) }),
+    },
+    commands: {
+      set: (list) => call('commands.set', { list }),
+      onRun: (cb) => on('command', cb),
     },
     settings: { get: (key) => call('settings.get', { key }) },
     storage: { get: (key) => call('storage.get', { key }), set: (key, value) => call('storage.set', { key, value }) },

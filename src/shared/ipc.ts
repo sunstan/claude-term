@@ -390,6 +390,15 @@ export interface CtApi {
     onShowRun(cb: (id: string) => void): () => void
     onPrompt(cb: (r: PromptRequest) => void): () => void
     promptReply(id: number, value: string | null): void
+    /** the running plugins' commands (palette, shortcuts) */
+    commands(): Promise<import('./plugins').PluginCommand[]>
+    onCommands(cb: (list: import('./plugins').PluginCommand[]) => void): () => void
+    runCommand(pluginId: string, id: string): void
+    /** a plugin's prompt for the project's Claude tab (permission "prompt"); send: Enter after it */
+    onInsertPrompt(cb: (r: { text: string; send: boolean }) => void): () => void
+    /** a plugin asks something of the window (kind "selection") */
+    onQuery(cb: (q: { id: number; kind: string }) => void): () => void
+    queryReply(id: number, value: unknown): void
     onOpenFile(cb: (path: string) => void): () => void
     onOpenDiff(cb: (r: DiffRequest) => void): () => void
     onPopover(cb: (r: PopoverRequest) => void): () => void

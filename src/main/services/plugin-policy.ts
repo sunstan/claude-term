@@ -6,6 +6,7 @@ import type { PluginPermission } from '@shared/plugins'
  * app); a user plugin only gets what its approved permissions allow:
  * - process: process.exec, and terminal.run (typing into a shell is running a command)
  * - fs: its own folder and the open project; fs:home widens reads / watches to the home folder
+ * - prompt: claude.insertPrompt (typing into Claude's input is asking Claude to act)
  * - network: nothing yet (the sandbox session blocks every request)
  */
 export interface PolicyCtx {
@@ -18,7 +19,7 @@ export interface PolicyCtx {
   real: (p: string) => string
 }
 
-const NEEDS: Record<string, PluginPermission> = { 'process.exec': 'process', 'terminal.run': 'process', 'terminal.stop': 'process' }
+const NEEDS: Record<string, PluginPermission> = { 'process.exec': 'process', 'terminal.run': 'process', 'terminal.stop': 'process', 'claude.insertPrompt': 'prompt' }
 
 export function permissionError(method: string, ctx: PolicyCtx): string | null {
   const need = NEEDS[method]

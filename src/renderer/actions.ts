@@ -1,5 +1,7 @@
 import { useWorkbench, type LeftActivity } from '@/stores/workbench'
-import { binding, label as keyLabel, type KeyEventLike } from '@shared/keymap'
+import { binding, label as keyLabel, matches, terminalSafe, type KeyEventLike } from '@shared/keymap'
+import type { PluginCommand } from '@shared/plugins'
+import { usePlugins } from '@/stores/plugins'
 import { usePalette } from '@/stores/palette'
 
 /**
@@ -44,4 +46,10 @@ export function runAppAction(id: string): boolean {
     case 'app.commit': if (!p?.root) return false; st.setLeft('claudeterm.git:git'); setTimeout(() => (document.querySelector('.pv-footer textarea') as HTMLTextAreaElement | null)?.focus(), 150); return true
   }
   return false
+}
+
+/** The plugin command a keydown triggers (after the app's own shortcuts); in a terminal, only those it leaves to the app. */
+export function pluginCommandFor(e: KeyEventLike, inTerminal: boolean): PluginCommand | null {
+  const mac = window.ct.platform === 'darwin'
+  return usePlugins.getState().commands.find((c) => c.shortcut && matches(c.shortcut, e, mac) && (!inTerminal || terminalSafe(c.shortcut, mac))) ?? null
 }

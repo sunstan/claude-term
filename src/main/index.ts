@@ -287,6 +287,9 @@ ipcMain.on('plugins:project', (_e, root: string | null) => { if (root !== active
 ipcMain.on('plugins:commandEnd', (_e, info) => pluginHost.commandEnd(info))
 ipcMain.on('plugins:runs', (_e, list) => pluginHost.runsChanged(Array.isArray(list) ? list : []))
 ipcMain.on('plugins:promptReply', (_e, { id, value }) => pluginHost.promptReply(id, value))
+ipcMain.handle('plugins:commands', () => pluginHost.commands())
+ipcMain.on('plugins:runCommand', (_e, { pluginId, id }) => { if (typeof pluginId === 'string' && typeof id === 'string') pluginHost.runCommand(pluginId, id) })
+ipcMain.on('plugins:queryReply', (_e, { id, value }) => pluginHost.queryReply(id, value))
 
 // plugin catalogue (DESIGN.md §7.1)
 const setApproved = (id: string, perms: string[] | null) => {

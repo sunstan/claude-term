@@ -74,6 +74,23 @@ describe('plugin bootstrap (window side)', () => {
     expect(await run({ 'main.js': 'exports.default = { activate() {} }' })).toEqual([])
   })
 
+  it('routes prompts, the selection and commands to the bridge', async () => {
+    const f = fakeBridge()
+    boot(f.bridge, manifest, { 'main.js': `exports.activate = async (ctx) => {
+      ctx.claude.insertPrompt('relis', { send: true }); ctx.claude.insertPrompt('à compléter')
+      ctx.commands.set([{ id: 'review', title: 'Revue', shortcut: 'Mod+Alt+R' }])
+      ctx.commands.onRun((id) => { globalThis.__cmd = id })
+      await ctx.workspace.selection()
+    }` })
+    await tick()
+    expect(f.calls).toEqual(expect.arrayContaining([
+      ['claude.insertPrompt', { text: 'relis', send: true }], ['claude.insertPrompt', { text: 'à compléter', send: false }],
+      ['commands.set', { list: [{ id: 'review', title: 'Revue', shortcut: 'Mod+Alt+R' }] }], ['workspace.selection', undefined],
+    ]))
+    f.emit('command', 'review')
+    expect((globalThis as any).__cmd).toBe('review')
+  })
+
   it('calls deactivate when the host stops the plugin', async () => {
     const f = fakeBridge()
     boot(f.bridge, manifest, { 'main.js': 'exports.activate = () => {}; exports.deactivate = () => { globalThis.__off = true }' })

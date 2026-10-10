@@ -1,11 +1,13 @@
 import { create } from 'zustand'
 import { useWorkbench } from './workbench'
-import type { PluginInfo, ViewModel, PopoverRequest } from '@shared/plugins'
+import type { PluginInfo, ViewModel, PopoverRequest, PluginCommand } from '@shared/plugins'
 
 interface PluginStore {
   plugins: PluginInfo[]
   views: Record<string, ViewModel>
   popovers: PopoverRequest[]
+  /** the running plugins' commands (palette, shortcuts) */
+  commands: PluginCommand[]
   closePopover(id: string): void
   init(): void
   /** views placed in the center bottom block */
@@ -24,6 +26,7 @@ export const usePlugins = create<PluginStore>((set, get) => ({
   plugins: [],
   views: {},
   popovers: [],
+  commands: [],
   closePopover(id) { set((s) => ({ popovers: s.popovers.filter((p) => p.id !== id) })) },
   bottomViews() {
     return get().plugins.filter((p) => p.enabled).flatMap((p) => (p.manifest.contributes?.views ?? []).filter((v) => v.placement === 'bottom').map((v) => ({ id: `${p.manifest.id}:${v.id}`, title: v.title, pluginId: p.manifest.id })))
@@ -46,6 +49,8 @@ export const usePlugins = create<PluginStore>((set, get) => ({
       set({ treeState: ts })
     })
     window.ct.plugins.list().then((plugins) => set({ plugins }))
+    window.ct.plugins.commands().then((commands) => set({ commands }))
+    window.ct.plugins.onCommands((commands) => set({ commands }))
     window.ct.plugins.onChanged((plugins) => {
       set({ plugins })
       // a disabled or uninstalled plugin takes its activity with it

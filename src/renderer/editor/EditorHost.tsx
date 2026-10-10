@@ -59,6 +59,12 @@ function monacoKey(s: string): number | null {
 }
 let keymapDisposables: { dispose(): void }[] = []
 /** (Re)binds every keymap action in Monaco: editor actions run the Monaco command, general ones the app action. */
+/** The editor's selected text ('' when nothing is selected). */
+export function editorSelection(): string {
+  const sel = editor?.getSelection(), model = editor?.getModel()
+  return sel && model ? model.getValueInRange(sel) : ''
+}
+
 export function applyKeymap(overrides: Record<string, string>, preset?: KeymapPreset) {
   if (!editor) return
   keymapDisposables.forEach((d) => d.dispose()); keymapDisposables = []

@@ -15,6 +15,14 @@ describe('plugin policy', () => {
     expect(permissionError('ui.viewSet', ctx())).toBeNull()
   })
 
+  it('requires "prompt" to type into Claude, nothing to read the selection or set commands', () => {
+    expect(permissionError('claude.insertPrompt', ctx())).toMatch(/"prompt"/)
+    expect(permissionError('claude.insertPrompt', ctx({ permissions: new Set(['process']) }))).toMatch(/"prompt"/)
+    expect(permissionError('claude.insertPrompt', ctx({ permissions: new Set(['prompt']) }))).toBeNull()
+    expect(permissionError('workspace.selection', ctx())).toBeNull()
+    expect(permissionError('commands.set', ctx())).toBeNull()
+  })
+
   it('limits fs to the plugin folder and the project, the home folder with fs:home', () => {
     expect(fsError('/work/proj/src/a.ts', ctx())).toBeNull()
     expect(fsError('/work/proj', ctx())).toBeNull()

@@ -122,8 +122,12 @@ sync / async calls to main, which identifies the caller by its webContents and c
 (`src/main/services/plugin-policy.ts`); `resources/plugin-host/bootstrap.js` rebuilds the `ctx` API
 (`resources/plugins/claudeterm.d.ts`) on it and provides `require` for the plugin's own files. Disabling a plugin
 destroys its window. Permissions for user plugins (built-ins are trusted): `process` = `process.exec` and
-`terminal.run`; fs = its folder and the open project, `fs:home` = the home folder (symlinks resolved); `network` and
-`secrets` = nothing yet. `terminal.run` returns an id: the tab carries it until the command ends (shell integration),
+`terminal.run`; fs = its folder and the open project, `fs:home` = the home folder (symlinks resolved); `prompt` =
+`claude.insertPrompt` (a paste into the project's Claude tab, Enter after it with `send`; a new tab waits until Claude has
+drawn its input); `network` and `secrets` = nothing yet. Without permission: `workspace.selection()` (the editor's or the
+shown terminal's selection, and the file shown; main asks the window) and `commands.set` / `onRun` (with
+`contributes.commands`: palette entries, shortcuts the app's keymap does not already take; in a terminal Ctrl+letter
+alone stays the shell's). `terminal.run` returns an id: the tab carries it until the command ends (shell integration),
 `terminal.runs()` / `onDidChangeRuns` list the plugin's running commands, `terminal.stop(id)` sends Ctrl+C ("process"). Events reach the owning plugin only; a plugin can only set its own views and popovers. Views are namespaced `<pluginId>:<viewId>`. Activity entries contributed by plugins sit
 after a separator line in the bar. Built-in plugin: **Git** (`resources/plugins/git`, decided 2026-09-27 with a zero-bug rule): no git logic of our
 own, reads through porcelain v2 / log formats parsed by tested code, every write is a plain `git`

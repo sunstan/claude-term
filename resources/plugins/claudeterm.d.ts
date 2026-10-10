@@ -5,6 +5,7 @@
  * - "process": process.exec and terminal.run
  * - fs (exists / read / list / watch, openFile): the plugin folder and the open project; "fs:home" widens it to the
  *   home folder. Absolute paths only.
+ * - "prompt": claude.insertPrompt
  */
 export interface ViewAction { id: string; title: string; icon?: string; primary?: boolean }
 export interface ViewItem {
@@ -29,6 +30,11 @@ export interface Context {
     onDidChangeProject(cb: (root: string | null) => void): () => void
     /** opens a file in an editor tab of the active project */
     openFile(path: string): void
+    /**
+     * What is selected in the tab shown (the editor or a terminal), and the file the editor shows (absolute path).
+     * source null: nothing to read there (a diff, the welcome screen).
+     */
+    selection(): Promise<{ text: string; file: string | null; source: 'editor' | 'terminal' | null }>
     fs: {
       exists(path: string): boolean
       read(path: string): string
@@ -59,6 +65,23 @@ export interface Context {
     show(id: string): void
     /** a foreground command ended in a shell tab of the active project */
     onCommandEnd(cb: (info: { command: string; exit: number | null }) => void): () => void
+  }
+  /** requires the "prompt" permission */
+  claude: {
+    /**
+     * Types `text` into the active project's Claude tab (the one shown, else the last used, else a new one once Claude
+     * is ready) as one paste, several lines kept; `send` presses Enter after it, otherwise the user completes it.
+     */
+    insertPrompt(text: string, opts?: { send?: boolean }): void
+  }
+  /**
+   * Commands in the palette (> mode), each with an optional shortcut ("Mod+Alt+P"; Mod is ⌘ on macOS, Ctrl elsewhere).
+   * The app's own shortcuts come first; in a terminal, Ctrl+letter alone stays the shell's. plugin.json's
+   * contributes.commands are listed too; `set` replaces the ones this plugin added before.
+   */
+  commands: {
+    set(list: { id: string; title: string; shortcut?: string }[]): void
+    onRun(cb: (id: string) => void): () => void
   }
   /** requires the "process" permission */
   process: { exec(file: string, args?: string[], opts?: { cwd?: string }): Promise<{ code: number; stdout: string; stderr: string }> }

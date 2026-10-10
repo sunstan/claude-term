@@ -1,4 +1,5 @@
 /** Plugin system contract: manifest, declarative view models, host ↔ renderer messages. */
+import { parse as parseKey } from './keymap'
 
 export interface PluginManifest {
   id: string
@@ -8,11 +9,12 @@ export interface PluginManifest {
   main: string
   /** "startup" (default) or lazy: "onView:<viewId>" */
   activation?: string[]
-  permissions?: ('process' | 'fs:home' | 'network' | 'secrets')[]
+  permissions?: ('process' | 'fs:home' | 'network' | 'secrets' | 'prompt')[]
   contributes?: {
     activity?: { id: string; side: 'left' | 'right'; title: string; icon: string }[]
     /** placement: sidebar (default, under the activity) or bottom (a tab of the center session block) */
     views?: { id: string; activity?: string; title: string; placement?: 'sidebar' | 'bottom' }[]
+    /** in the palette (> mode), with an optional shortcut; ctx.commands.onRun hears them (ctx.commands.set adds more) */
     commands?: { id: string; title: string; shortcut?: string }[]
     settings?: Record<string, { type: 'string' | 'boolean' | 'number'; default?: unknown; description?: string; enum?: string[] }>
   }
@@ -24,6 +26,26 @@ export const PLUGIN_PERMISSIONS: Record<PluginPermission, string> = {
   'fs:home': 'lire les fichiers du dossier personnel (sinon : le projet ouvert seulement)',
   network: 'accès réseau (pas encore disponible : bloqué)',
   secrets: 'secrets du trousseau (pas encore disponible)',
+  prompt: 'écrire des prompts dans l’onglet Claude du projet, et les envoyer',
+}
+
+/** A command a plugin offers: in the palette, and on its shortcut ("Mod+Alt+P") unless the app's keymap has it. */
+export interface PluginCommand { pluginId: string; id: string; title: string; shortcut?: string }
+
+/** The commands a plugin declares (manifest, then ctx.commands.set), checked: at most 100, ids unique, shortcuts parsable. */
+export function cleanCommands(pluginId: string, list: unknown): PluginCommand[] {
+  if (!Array.isArray(list)) return []
+  const seen = new Set<string>()
+  const out: PluginCommand[] = []
+  for (const c of list) {
+    if (!c || typeof c !== 'object' || typeof c.id !== 'string' || !/^[\w.:-]{1,80}$/.test(c.id) || seen.has(c.id)) continue
+    if (typeof c.title !== 'string' || !c.title.trim()) continue
+    seen.add(c.id)
+    const shortcut = typeof c.shortcut === 'string' && parseKey(c.shortcut) ? c.shortcut : undefined
+    out.push({ pluginId, id: c.id, title: c.title.trim().slice(0, 120), ...(shortcut ? { shortcut } : {}) })
+    if (out.length === 100) break
+  }
+  return out
 }
 
 /** enabled = activated; disabled = turned off by the user; pendingPermissions = asked by the manifest, not approved yet */

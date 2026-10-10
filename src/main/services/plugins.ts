@@ -4,7 +4,7 @@ import { homedir } from 'node:os'
 import { join, dirname, relative, sep } from 'node:path'
 import { execFile } from 'node:child_process'
 import { missingPermissions } from '@shared/plugin-registry'
-import { validateManifest, type PluginManifest, type PluginInfo, type ViewModel, type ViewEvent, type PromptRequest, type RunInfo } from '@shared/plugins'
+import { cleanCommands, validateManifest, type PluginCommand, type PluginManifest, type PluginInfo, type ViewModel, type ViewEvent, type PromptRequest, type RunInfo } from '@shared/plugins'
 import { fsError, permissionError, type PolicyCtx } from './plugin-policy'
 
 export { validateManifest }
@@ -33,6 +33,11 @@ export class PluginHost {
   private views = new Map<string, ViewModel>()
   private prompts = new Map<number, (v: string | null) => void>()
   private promptSeq = 0
+  /** commands each running plugin added with ctx.commands.set (its manifest's come first) */
+  private dynamicCommands = new Map<string, PluginCommand[]>()
+  /** questions to the renderer (the selection), answered through queryReply */
+  private queries = new Map<number, (v: unknown) => void>()
+  private querySeq = 0
   private popoverSeq = 0
   private watchSeq = 0
   private runSeq = 0
@@ -109,7 +114,32 @@ export class PluginHost {
     this.changed()
   }
 
-  private changed() { this.bridge.send('plugins:changed', this.list()) }
+  private changed() { this.bridge.send('plugins:changed', this.list()); this.sendCommands() }
+
+  /** The commands of the running plugins: their manifest's, then those they set. */
+  commands(): PluginCommand[] {
+    return [...this.plugins.values()].filter((p) => p.win && p.info.enabled).flatMap((p) => {
+      const id = p.info.manifest.id
+      const all = [...cleanCommands(id, p.info.manifest.contributes?.commands), ...(this.dynamicCommands.get(id) ?? [])]
+      return all.filter((c, i) => all.findIndex((x) => x.id === c.id) === i)
+    })
+  }
+  private sendCommands() { this.bridge.send('plugins:commands', this.commands()) }
+  /** a command chosen in the palette or on its shortcut: to its plugin only */
+  runCommand(pluginId: string, id: string) {
+    const p = this.plugins.get(pluginId)
+    if (p && this.commands().some((c) => c.pluginId === pluginId && c.id === id)) this.emit(p, 'command', id)
+  }
+  queryReply(id: number, value: unknown) { this.queries.get(id)?.(value); this.queries.delete(id) }
+  /** asks the renderer, with an answer of null when it does not reply in time */
+  private ask(kind: string): Promise<unknown> {
+    return new Promise((res) => {
+      const id = ++this.querySeq
+      const t = setTimeout(() => { this.queries.delete(id); res(null) }, 3000)
+      this.queries.set(id, (v) => { clearTimeout(t); res(v) })
+      this.bridge.send('plugins:query', { id, kind })
+    })
+  }
 
   private activate(p: Loaded) {
     const { manifest, dir } = p.info
@@ -128,6 +158,7 @@ export class PluginHost {
     win.webContents.on('render-process-gone', (_e, d) => { if (p.win === win) this.fail(p, `le processus du plugin s'est arrêté (${d.reason})`) })
     p.win = win
     this.byContents.set(win.webContents.id, p)
+    this.sendCommands()
     win.loadURL('about:blank')
       .then(() => win.webContents.executeJavaScript(`(${this.bootstrap}\n)(window.ctPlugin, ${JSON.stringify(manifest)}, ${JSON.stringify(files)}); void 0`))
       .catch((e) => this.fail(p, e))
@@ -135,6 +166,7 @@ export class PluginHost {
 
   private stop(p: Loaded) {
     p.watchers.forEach((w) => w.close()); p.watchers.clear()
+    if (this.dynamicCommands.delete(p.info.manifest.id)) this.sendCommands()
     const win = p.win
     p.win = undefined
     if (!win || win.isDestroyed()) return
@@ -186,6 +218,7 @@ export class PluginHost {
         const cwd = typeof a.cwd === 'string' ? a.cwd : undefined
         return { value: await new Promise((res) => execFile(a.file, a.args, { cwd, maxBuffer: 8_000_000 }, (err, stdout, stderr) => res({ code: err ? (typeof (err as any).code === 'number' ? (err as any).code : 1) : 0, stdout: String(stdout), stderr: String(stderr) }))) }
       }
+      if (method === 'workspace.selection') return { value: (await this.ask('selection')) ?? { text: '', file: null, source: null } }
       if (method === 'ui.prompt') {
         const req = a as Omit<PromptRequest, 'id'>
         return { value: await new Promise<string | null>((res) => { const id = ++this.promptSeq; this.prompts.set(id, res); this.bridge.send('plugins:prompt', { id, title: String(req.title ?? ''), placeholder: req.placeholder, options: req.options }) }) }
@@ -237,6 +270,12 @@ export class PluginHost {
         if (typeof a.id !== 'string' || !a.id.startsWith(id + ':')) throw new Error('not a command of this plugin')
         return void this.bridge.send(method === 'terminal.stop' ? 'plugins:stopRun' : 'plugins:showRun', { id: a.id })
       }
+      case 'claude.insertPrompt': {
+        if (typeof a.text !== 'string' || !a.text.trim()) throw new Error('insertPrompt: text expected')
+        if (a.text.length > 50_000) throw new Error('insertPrompt: text too long')
+        return void this.bridge.send('plugins:insertPrompt', { text: a.text, send: a.send === true })
+      }
+      case 'commands.set': { this.dynamicCommands.set(id, cleanCommands(id, a.list)); return void this.sendCommands() }
       case 'settings.get': { const s = this.bridge.settings(); return s.plugins?.[id]?.[a.key] ?? p.info.manifest.contributes?.settings?.[a.key]?.default }
       case 'storage.get': return readStorage(this.storageFile(id))[a.key]
       case 'storage.set': { const f = this.storageFile(id); const d = readStorage(f); d[a.key] = a.value; mkdirSync(dirname(f), { recursive: true }); return void writeFileSync(f, JSON.stringify(d, null, 2)) }

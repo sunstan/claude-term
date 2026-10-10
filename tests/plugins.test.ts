@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { createRequire } from 'node:module'
 import { join } from 'node:path'
 import { TempDir } from './helpers'
-import { validateManifest, filterItems } from '../src/shared/plugins'
+import { validateManifest, filterItems, cleanCommands } from '../src/shared/plugins'
 import { existsSync, readFileSync, readdirSync } from 'node:fs'
 
 const require = createRequire(import.meta.url)
@@ -32,3 +32,17 @@ describe('view search', () => {
   })
 })
 
+describe('plugin commands', () => {
+  it('keeps valid commands: unique ids, a title, a parsable shortcut, 100 at most', () => {
+    expect(cleanCommands('acme.x', [
+      { id: 'review', title: ' Revue ', shortcut: 'Mod+Alt+R' },
+      { id: 'review', title: 'twice' },
+      { id: 'bad id!', title: 'x' },
+      { id: 'notitle', title: '' },
+      { id: 'badkey', title: 'K', shortcut: 'Hyper+K' },
+      'nope',
+    ])).toEqual([{ pluginId: 'acme.x', id: 'review', title: 'Revue', shortcut: 'Mod+Alt+R' }, { pluginId: 'acme.x', id: 'badkey', title: 'K' }])
+    expect(cleanCommands('acme.x', 'nope')).toEqual([])
+    expect(cleanCommands('acme.x', Array.from({ length: 150 }, (_, i) => ({ id: 'c' + i, title: 'C' })))).toHaveLength(100)
+  })
+})

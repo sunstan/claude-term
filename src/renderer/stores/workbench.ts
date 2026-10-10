@@ -33,6 +33,8 @@ export interface Tab {
   attention?: Attention | null
   /** Claude is working on a turn (the title Claude Code gives its terminal) */
   working?: boolean
+  /** Claude has drawn its interface (its terminal title says idle or working): its input takes a prompt */
+  claudeReady?: boolean
   /** a name the user gave the tab: shown instead of `title`, which keeps following the folder */
   customTitle?: string
   /** reopened from the last launch and not shown yet: its process (or file) starts once it is (wake) */
@@ -100,7 +102,8 @@ interface Workbench {
   /** starts a tab reopened from the last launch (its shell, `claude --resume`, or its file) */
   wake(tabId: string): Promise<void>
   /** types text into the current Claude tab of the project (opens one if needed) */
-  insertPrompt(projectId: string, text: string): Promise<void>
+  /** types into the project's Claude tab; paste: as one bracketed paste (several lines stay one prompt); send: Enter after */
+  insertPrompt(projectId: string, text: string, opts?: { paste?: boolean; send?: boolean }): Promise<void>
   /** types escaped file paths into a terminal tab (the current one, else the Claude tab) */
   sendPaths(projectId: string, paths: string[], tabId?: string): Promise<void>
   captureScreen(projectId: string): Promise<void>
@@ -313,17 +316,24 @@ export const useWorkbench = create<Workbench>((set, get) => ({
     const p = await window.ct.attachments.captureScreen()
     if (p) get().sendPaths(projectId, [p])
   },
-  async insertPrompt(projectId, text) {
+  async insertPrompt(projectId, text, opts = {}) {
     const p = get().projects.find((x) => x.id === projectId)
     if (!p) return
+    const tabOf = (id: string) => get().projects.find((x) => x.id === projectId)?.tabs.find((x) => x.id === id)
     let t = p.tabs.find((x) => x.id === p.currentTabId && isClaude(x) && x.alive) ?? p.tabs.find((x) => isClaude(x) && x.alive)
-    // a Claude tab reopened from the last launch starts first
-    if (t?.dormant) { const id = t.id; await get().wake(id); await new Promise((r) => setTimeout(r, 2500)); t = get().projects.find((x) => x.id === projectId)?.tabs.find((x) => x.id === id) }
-    if (!t) { await get().newTab(projectId, 'claude'); await new Promise((r) => setTimeout(r, 1500)); t = get().projects.find((x) => x.id === projectId)?.tabs.at(-1) }
-    if (!t?.ptyId) return
-    get().setCurrentTab(projectId, t.id)
-    window.ct.pty.write(t.ptyId, text)
-    ;(await import('@/terminal/TerminalView')).focusTerminal(t.id)
+    // a Claude tab reopened from the last launch starts first; a new one is made when there is none
+    if (t?.dormant) await get().wake(t.id)
+    else if (!t) { await get().newTab(projectId, 'claude'); t = get().projects.find((x) => x.id === projectId)?.tabs.at(-1) }
+    if (!t) return
+    const id = t.id
+    get().setCurrentTab(projectId, id)
+    // until Claude has drawn its input (its terminal title), what is typed would be lost; 20 s at most
+    for (let i = 0; i < 200 && !tabOf(id)?.claudeReady && tabOf(id)?.alive; i++) await new Promise((r) => setTimeout(r, 100))
+    t = tabOf(id)
+    if (!t?.ptyId || !t.alive) return
+    window.ct.pty.write(t.ptyId, opts.paste ? '\x1b[200~' + text + '\x1b[201~' : text)
+    if (opts.send) { const pty = t.ptyId; setTimeout(() => window.ct.pty.write(pty, '\r'), 150) }
+    ;(await import('@/terminal/TerminalView')).focusTerminal(id)
   },
   async closeTab(projectId, tabId) {
     const p = get().projects.find((x) => x.id === projectId)
@@ -492,6 +502,7 @@ export const useWorkbench = create<Workbench>((set, get) => ({
     const s = get()
     const p = s.projects.find((x) => x.tabs.some((t) => t.id === tabId))
     const t = p?.tabs.find((x) => x.id === tabId)
+    if (activity && t && isClaude(t) && !t.claudeReady) patchTab(set, tabId, () => ({ claudeReady: true }))
     if (!activity || !t || !isClaude(t) || (activity === 'working') === !!t.working) return
     patchTab(set, tabId, () => ({ working: activity === 'working' }))
     // a turn that ends out of sight marks the tab (as the Stop hook does), unless something already waits there

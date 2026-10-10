@@ -6,7 +6,7 @@ import { usePlugins } from '@/stores/plugins'
 import { usePalette } from '@/stores/palette'
 import { runAppAction, shortcutLabel } from '@/actions'
 import { RIGHT } from './ActivityBar'
-import { ACTIONS } from '@shared/keymap'
+import { ACTIONS, label as keyLabel } from '@shared/keymap'
 import { joinPath } from '@shared/claude-format'
 import { paletteInput, rank, PALETTE_PREFIXES, type PaletteMode } from '@shared/palette'
 import type { SessionInfo, SkillInfo } from '@shared/ipc'
@@ -62,7 +62,11 @@ function PaletteModal({ initial }: { initial: string }) {
       const plug = usePlugins.getState()
       const plugins: Item[] = [...plug.activities('left').map((a) => ({ a, side: 'left' as const })), ...plug.activities('right').map((a) => ({ a, side: 'right' as const }))]
         .map(({ a, side }) => ({ key: 'plugin:' + a.id, icon: Icons.puzzle(13), label: a.title, detail: t('panneau'), run: () => (side === 'left' ? st.setLeft(a.id) : st.setRight(a.id)) }))
-      return rank([...actions, ...right, ...plugins], (x) => x.label, query)
+      // the plugins' commands, named after their plugin
+      const names = new Map(plug.plugins.map((p) => [p.manifest.id, p.manifest.name]))
+      const commands: Item[] = plug.commands.map((c) => ({ key: `cmd:${c.pluginId}:${c.id}`, icon: Icons.puzzle(13), label: c.title, detail: names.get(c.pluginId),
+        hint: c.shortcut ? keyLabel(c.shortcut, window.ct.platform === 'darwin') : undefined, run: () => window.ct.plugins.runCommand(c.pluginId, c.id) }))
+      return rank([...actions, ...right, ...plugins, ...commands], (x) => x.label, query)
     }
     if (mode === 'sessions') {
       return rank(sessions ?? [], (s) => `${s.title} ${s.projectPath.split(/[\\/]/).pop()}`, query, 60).map((s) => ({
