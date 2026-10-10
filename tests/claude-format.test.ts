@@ -113,6 +113,13 @@ describe('transcript parsing', () => {
     expect(u.events.map((e) => [e.kind, e.ref, e.toolId])).toEqual([['user', 'u1', undefined], ['text', 'a1:0', undefined], ['Agent', 'a1:1', 'tu1']])
     expect(u.agents).toEqual({ tu1: { agentId: 'abc123', description: 'explore' } })
   })
+  it('shows a sub-agent hand-back as its report, not as a prompt', () => {
+    const body = '[Subagent hand-back] The text below is the final report of a subagent. The report follows:\n  Root:\n  .git\n  apps'
+    const rec = { type: 'user', uuid: 'h1', isMeta: true, promptSource: 'system', origin: { kind: 'peer', name: 'Explore', handback: true, body }, message: { content: 'Another Claude session sent a message:\n<agent-message from="x">' + body } }
+    const u = parseTranscript(jsonl([rec]), opts)
+    expect(u.events.map((e) => [e.kind, e.agent, e.detail])).toEqual([['handback', 'Explore', 'Root: ⏎ .git ⏎ apps']])
+    expect(entryDetail(jsonl([rec]), 'h1')).toEqual({ kind: 'text', text: 'Root:\n.git\napps' })
+  })
   it('reads an entry in full: a tool call with its result, a text, a prompt', () => {
     const lines = jsonl([
       { type: 'user', uuid: 'u1', message: { content: 'corrige\nle bug' } },

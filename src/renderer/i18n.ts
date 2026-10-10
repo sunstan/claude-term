@@ -478,4 +478,5 @@ const EN: Record<string, string> = {
   'Reprise de la session…': 'Resuming the session…',
   'Démarrage…': 'Starting…',
   'Fichier introuvable ou illisible': 'File not found or unreadable',
+  'Retour de {agent}': 'Back from {agent}',
 }

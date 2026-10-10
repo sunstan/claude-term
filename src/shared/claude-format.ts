@@ -14,6 +14,8 @@ export interface ToolEvent {
   ref?: string
   /** tool_use id of a tool call */
   toolId?: string
+  /** a sub-agent's report handed back to the session (kind 'handback'): the agent's name */
+  agent?: string
 }
 
 /** A sub-agent an Agent / Task call started: its transcript is <session>/subagents/agent-<agentId>.jsonl. */
@@ -188,7 +190,11 @@ export function parseTranscript(lines: string[], opts: { plansDir: string; home:
           }
         }
         const t = textOf(msg.content)
-        if (t && !t.startsWith('<')) u.events.push({ id: ++eventSeq, time, kind: 'user', detail: oneLine(t), file: null, ...(typeof obj.uuid === 'string' ? { ref: obj.uuid } : {}) })
+        const ref = typeof obj.uuid === 'string' ? { ref: obj.uuid } : {}
+        // a sub-agent's report, which Claude Code hands back to the session as a message: not a prompt of the user's
+        const back = handback(obj)
+        if (back) u.events.push({ id: ++eventSeq, time, kind: 'handback', detail: oneLine(back.report), file: null, agent: back.agent, ...ref })
+        else if (t && !t.startsWith('<')) u.events.push({ id: ++eventSeq, time, kind: 'user', detail: oneLine(t), file: null, ...ref })
         // `/effort <level>` is recorded when typed, before Claude answers
         const effort = t?.includes('<command-name>/effort</command-name>') ? t.match(/<command-args>\s*([a-z]+)\s*<\/command-args>/)?.[1] : undefined
         if (effort && !obj.isSidechain) u.effort = effort
@@ -230,7 +236,7 @@ export function entryFinder(ref: string): { line(line: string): EntryDetail | nu
       try { o = JSON.parse(line) } catch { return undefined }
       if (!found) {
         if (o?.uuid !== uuid) return undefined
-        if (o.type === 'user') return { kind: 'user', text: textOf(o.message?.content) ?? '' }
+        if (o.type === 'user') { const back = handback(o); return back ? { kind: 'text', text: back.report } : { kind: 'user', text: textOf(o.message?.content) ?? '' } }
         const item = Array.isArray(o.message?.content) ? o.message.content[Number(idx)] : undefined
         if (!item || (item.type !== 'text' && item.type !== 'tool_use')) return null
         if (item.type === 'text') return { kind: 'text', text: String(item.text ?? '') }
@@ -250,6 +256,19 @@ export function entryDetail(lines: string[], ref: string): EntryDetail | null {
   const f = entryFinder(ref)
   for (const l of lines) { const r = f.line(l); if (r !== undefined) return r }
   return f.end()
+}
+
+/**
+ * A sub-agent's report handed back to the session (a user record with origin `peer` and `handback`): the agent's name
+ * and the report, without the frame Claude Code puts around it (its preamble, the indent of each line).
+ */
+export function handback(o: any): { agent: string; report: string } | null {
+  const origin = o?.origin
+  if (origin?.kind !== 'peer' || !origin.handback || typeof origin.body !== 'string') return null
+  const body: string = origin.body
+  const at = body.indexOf('The report follows:\n')
+  const report = at < 0 ? body : body.slice(at + 'The report follows:\n'.length).split('\n').map((l) => l.replace(/^ {2}/, '')).join('\n')
+  return { agent: typeof origin.name === 'string' && origin.name ? origin.name : 'sous-agent', report: report.trim() }
 }
 
 /** Splits a chunk into complete lines; the remainder (no trailing newline) is returned separately. */

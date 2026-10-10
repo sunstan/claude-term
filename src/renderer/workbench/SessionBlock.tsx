@@ -110,7 +110,7 @@ const eventIcon = (kind: string) => {
     case 'Read': return Icons.file(12)
     case 'Bash': return Icons.terminal(12)
     case 'Grep': case 'Glob': case 'WebSearch': return Icons.search(12)
-    case 'Agent': case 'Task': return Icons.sparkle(12)
+    case 'Agent': case 'Task': case 'handback': return Icons.sparkle(12)
     default: return Icons.activity(12)
   }
 }
@@ -166,9 +166,10 @@ function EventRow({ e, tab, agentId, onDrill }: { e: ToolEvent; tab: Tab; agentI
   const agent = e.toolId ? s.agents[e.toolId] : undefined
   return (
     <>
-      <div className={'event ' + (e.kind === 'user' ? 'user' : e.kind === 'text' ? 'text' : 'tool') + (open ? ' open' : '')} onClick={() => e.ref && setOpen(!open)} onDoubleClick={() => e.file && openFile(projectId, e.file)} title={e.file ?? undefined}>
+      <div className={'event ' + (e.kind === 'user' ? 'user' : e.kind === 'text' ? 'text' : e.kind === 'handback' ? 'handback' : 'tool') + (open ? ' open' : '')} onClick={() => e.ref && setOpen(!open)} onDoubleClick={() => e.file && openFile(projectId, e.file)} title={e.file ?? undefined}>
         <span className="ico">{eventIcon(e.kind)}</span>
-        {e.kind !== 'user' && e.kind !== 'text' && <span className="kind">{e.kind}</span>}
+        {e.kind === 'handback' ? <span className="kind">{t('Retour de {agent}', { agent: e.agent ?? t('sous-agent') })}</span>
+          : e.kind !== 'user' && e.kind !== 'text' && <span className="kind">{e.kind}</span>}
         <span className="detail">{e.file ? short(e.file) : e.detail}</span>
         {agent && onDrill && <button className="linkbtn" onClick={(ev) => { ev.stopPropagation(); onDrill({ agentId: agent.agentId, description: agent.description ?? e.detail }) }}>{t('Ouvrir le sous-agent')}</button>}
       </div>
@@ -178,7 +179,7 @@ function EventRow({ e, tab, agentId, onDrill }: { e: ToolEvent; tab: Tab; agentI
 }
 
 function EntryDetailView({ detail }: { detail: EntryDetail | null | undefined }) {
-  const html = useMemo(() => (detail && detail.kind === 'text' ? DOMPurify.sanitize(marked.parse(detail.text, { async: false }) as string) : ''), [detail])
+  const html = useMemo(() => (detail && detail.kind === 'text' ? DOMPurify.sanitize(marked.parse(detail.text, { async: false, breaks: true }) as string) : ''), [detail])
   if (detail === undefined) return <div className="entry-detail muted">{t('Lecture…')}</div>
   if (detail === null) return <div className="entry-detail muted">{t('Introuvable dans le transcript')}</div>
   if (detail.kind !== 'tool') return detail.kind === 'text' ? <div className="entry-detail md" dangerouslySetInnerHTML={{ __html: html }} /> : <div className="entry-detail"><pre>{detail.text}</pre></div>
