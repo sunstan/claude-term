@@ -4,8 +4,9 @@ import { FileIcon } from './FileIcon'
 import { useWorkbench } from '@/stores/workbench'
 import { usePlugins } from '@/stores/plugins'
 import { usePalette } from '@/stores/palette'
-import { runAppAction } from '@/actions'
-import { ACTIONS, binding, label as keyLabel } from '@shared/keymap'
+import { runAppAction, shortcutLabel } from '@/actions'
+import { RIGHT } from './ActivityBar'
+import { ACTIONS } from '@shared/keymap'
 import { joinPath } from '@shared/claude-format'
 import { paletteInput, rank, PALETTE_PREFIXES, type PaletteMode } from '@shared/palette'
 import type { SessionInfo, SkillInfo } from '@shared/ipc'
@@ -13,17 +14,14 @@ import { t } from '@/i18n'
 
 interface Item { key: string; icon: ReactNode; label: string; detail?: string; hint?: string; run: () => void }
 
-const RIGHT = [
-  { id: 'claude', title: 'Claude : usage, version, artifacts' }, { id: 'process', title: 'Process Claude' },
-  { id: 'history', title: 'Historique (toutes les sessions)' }, { id: 'skills', title: 'Skills perso et plugins' },
-]
 const MODES: Record<PaletteMode, string> = { files: 'Fichiers du projet', commands: 'Commandes', sessions: 'Sessions Claude', skills: 'Skills et commandes /' }
 
 /** Command palette: files, `>` commands, `@` sessions, `/` skills; ↑ ↓ to move, Enter to run, Esc to close. */
 export function Palette() {
   const initial = usePalette((s) => s.text)
   if (initial === null) return null
-  return <PaletteModal initial={initial} />
+  // keyed: reopened with another text while open (a command opening the file list), it starts over
+  return <PaletteModal key={initial} initial={initial} />
 }
 
 function PaletteModal({ initial }: { initial: string }) {
@@ -38,7 +36,6 @@ function PaletteModal({ initial }: { initial: string }) {
   const projectId = useWorkbench((s) => s.activeProjectId)
   const root = useWorkbench((s) => s.projects.find((p) => p.id === s.activeProjectId)?.root ?? null)
   const st = useWorkbench.getState()
-  const mac = window.ct.platform === 'darwin'
   const { mode, query } = paletteInput(text)
   const input = useRef<HTMLInputElement>(null)
   useEffect(() => { input.current?.focus(); const n = initial.length; input.current?.setSelectionRange(n, n) }, [])
@@ -59,11 +56,8 @@ function PaletteModal({ initial }: { initial: string }) {
   const run = (f: () => void) => { close(); f() }
   const items: Item[] = useMemo(() => {
     if (mode === 'commands') {
-      const kb = settings?.keybindings ?? {}, preset = settings?.keymapPreset
-      const actions: Item[] = ACTIONS.filter((a) => a.scope === 'general').map((a) => {
-        const k = binding(a.id, kb, preset, mac)
-        return { key: a.id, icon: Icons.play(13), label: t(a.label), hint: k ? keyLabel(k, mac) : undefined, run: () => runAppAction(a.id) }
-      })
+      const actions: Item[] = ACTIONS.filter((a) => a.scope === 'general')
+        .map((a) => ({ key: a.id, icon: Icons.play(13), label: t(a.label), hint: shortcutLabel(a.id) || undefined, run: () => runAppAction(a.id) }))
       const right: Item[] = RIGHT.map((r) => ({ key: 'right:' + r.id, icon: Icons.columns(13), label: t(r.title), run: () => st.setRight(useWorkbench.getState().rightActivity === r.id ? null : r.id) }))
       const plug = usePlugins.getState()
       const plugins: Item[] = [...plug.activities('left').map((a) => ({ a, side: 'left' as const })), ...plug.activities('right').map((a) => ({ a, side: 'right' as const }))]

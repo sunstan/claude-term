@@ -4,7 +4,6 @@ import { Icons } from './icons'
 import { useWorkbench, type LeftActivity, type RightActivity } from '@/stores/workbench'
 import { usePlugins } from '@/stores/plugins'
 import { useUpdate } from '@/stores/update'
-import { binding, label as keyLabel } from '@shared/keymap'
 import { withShortcut } from '@/actions'
 
 const pluginIcon = (name: string) => { const f = (Icons as Record<string, ((s?: number) => React.ReactElement) | undefined>)[name]; return f ? f() : Icons.puzzle() }
@@ -33,7 +32,8 @@ const LEFT: { id: LeftActivity; title: string; action: string; icon: () => React
   { id: 'plugins', title: 'Plugins', action: 'app.plugins', icon: () => Icons.puzzle() },
   { id: 'run', title: 'Exécuteurs', action: 'app.run', icon: () => Icons.play() },
 ]
-const RIGHT: { id: RightActivity; title: string; icon: () => React.ReactElement }[] = [
+/** The app's right panels (the palette lists them too). */
+export const RIGHT: { id: RightActivity; title: string; icon: () => React.ReactElement }[] = [
   { id: 'claude', title: 'Claude : usage, version, artifacts', icon: () => Icons.gauge() },
   { id: 'process', title: 'Process Claude', icon: () => Icons.cpu() },
   { id: 'history', title: 'Historique (toutes les sessions)', icon: () => Icons.clock() },
@@ -41,14 +41,13 @@ const RIGHT: { id: RightActivity; title: string; icon: () => React.ReactElement 
 ]
 
 export function LeftActivityBar() {
-  const { leftActivity, setLeft, settings } = useWorkbench()
-  const mac = window.ct.platform === 'darwin'
-  // the shortcut as the keymap has it now (preset, overrides)
-  const titled = (a: (typeof LEFT)[number]) => { const k = binding(a.action, settings?.keybindings ?? {}, settings?.keymapPreset, mac); return k ? `${t(a.title)} (${keyLabel(k, mac)})` : t(a.title) }
+  const leftActivity = useWorkbench((s) => s.leftActivity)
+  const setLeft = useWorkbench((s) => s.setLeft)
+  useWorkbench((s) => s.settings)   // the tooltips show the shortcuts as the keymap has them now
   return (
     <div className="activity left">
       {LEFT.map((a) => (
-        <button key={a.id} className={leftActivity === a.id ? 'on' : ''} title={titled(a)} onClick={() => setLeft(leftActivity === a.id ? null : a.id)}>
+        <button key={a.id} className={leftActivity === a.id ? 'on' : ''} title={withShortcut(t(a.title), a.action)} onClick={() => setLeft(leftActivity === a.id ? null : a.id)}>
           {a.icon()}
         </button>
       ))}

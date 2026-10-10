@@ -1,8 +1,9 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { create } from 'zustand'
 import type { ISearchOptions, SearchAddon } from '@xterm/addon-search'
 import { Icons } from '@/workbench/icons'
 import { t } from '@/i18n'
+import { useWorkbench } from '@/stores/workbench'
 
 /** The terminal whose find bar is open (one at a time). */
 export const useTermFind = create<{ tabId: string | null; open(tabId: string): void; close(): void }>((set) => ({
@@ -29,14 +30,14 @@ export function TermFindBar({ search, onDone }: { search: SearchAddon; onDone: (
     const sub = search.onDidChangeResults((r) => setRes({ index: r.resultIndex, count: r.resultCount }))
     return () => { sub.dispose(); search.clearDecorations() }
   }, [search])
-  const opts = (incremental: boolean): ISearchOptions => {
+  // the theme's colours resolved once (canvas read-backs), not at each keystroke
+  const theme = useWorkbench((s) => s.theme)
+  const decorations = useMemo(() => {
     const css = getComputedStyle(document.documentElement)
     const accent = css.getPropertyValue('--ct-accent').trim(), bg = css.getPropertyValue('--ct-terminal-bg').trim()
-    return {
-      caseSensitive: cs, wholeWord: word, regex: re, incremental,
-      decorations: { matchBackground: hex(accent, bg, 0.7), matchOverviewRuler: hex(accent), activeMatchBackground: hex(accent, bg, 0.35), activeMatchColorOverviewRuler: hex(accent) },
-    }
-  }
+    return { matchBackground: hex(accent, bg, 0.7), matchOverviewRuler: hex(accent), activeMatchBackground: hex(accent, bg, 0.35), activeMatchColorOverviewRuler: hex(accent) }
+  }, [theme])
+  const opts = (incremental: boolean): ISearchOptions => ({ caseSensitive: cs, wholeWord: word, regex: re, incremental, decorations })
   const find = (back: boolean, incremental = false) => {
     if (!q) { search.clearDecorations(); setRes(null); return }
     try { back ? search.findPrevious(q, opts(false)) : search.findNext(q, opts(incremental)) } catch { setRes({ index: -1, count: 0 }) }
