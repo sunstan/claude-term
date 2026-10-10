@@ -16,7 +16,7 @@ function PluginEntries({ side, current, select }: { side: 'left' | 'right'; curr
     <>
       <span className="sep" />
       {entries.map((a) => (
-        <button key={a.id} className={current === a.id ? 'on' : ''} title={a.title} onClick={() => select(current === a.id ? null : a.id)}>{pluginIcon(a.icon)}</button>
+        <button key={a.id} className={current === a.id ? 'on' : ''} data-tip={a.title} aria-label={a.title} onClick={() => select(current === a.id ? null : a.id)}>{pluginIcon(a.icon)}</button>
       ))}
     </>
   )
@@ -49,7 +49,7 @@ export function LeftActivityBar() {
   return (
     <div className="activity left">
       {LEFT.map((a) => (
-        <button key={a.id} className={leftActivity === a.id ? 'on' : ''} title={withShortcut(t(a.title), a.action)} onClick={() => setLeft(leftActivity === a.id ? null : a.id)}>
+        <button key={a.id} className={leftActivity === a.id ? 'on' : ''} data-tip={withShortcut(t(a.title), a.action)} aria-label={withShortcut(t(a.title), a.action)} onClick={() => setLeft(leftActivity === a.id ? null : a.id)}>
           {a.icon()}
         </button>
       ))}
@@ -64,14 +64,14 @@ export function RightActivityBar() {
   return (
     <div className="activity right">
       {RIGHT.map((a) => (
-        <button key={a.id} className={rightActivity === a.id ? 'on' : ''} title={t(a.title)} onClick={() => setRight(rightActivity === a.id ? null : a.id)}>
+        <button key={a.id} className={rightActivity === a.id ? 'on' : ''} data-tip={t(a.title)} aria-label={t(a.title)} onClick={() => setRight(rightActivity === a.id ? null : a.id)}>
           {a.icon()}
         </button>
       ))}
       <PluginEntries side="right" current={rightActivity} select={(id) => setRight(id as RightActivity | null)} />
       <span className="spacer" />
-      {update.status === 'ready' && <button className="update" title={t('Version {v} prête : redémarrer pour l\'installer (les terminaux seront fermés)', { v: update.version ?? '' })} onClick={() => window.ct.update.install()}>{Icons.download()}</button>}
-      <button className={showSettings ? 'on' : ''} title={withShortcut(t('Réglages'), 'app.settings')} onClick={() => setShowSettings(!showSettings)}>{Icons.gear()}</button>
+      {update.status === 'ready' && <button className="update" data-tip={t('Version {v} prête : redémarrer pour l\'installer (les terminaux seront fermés)', { v: update.version ?? '' })} onClick={() => window.ct.update.install()}>{Icons.download()}</button>}
+      <button className={showSettings ? 'on' : ''} data-tip={withShortcut(t('Réglages'), 'app.settings')} aria-label={withShortcut(t('Réglages'), 'app.settings')} onClick={() => setShowSettings(!showSettings)}>{Icons.gear()}</button>
     </div>
   )
 }
