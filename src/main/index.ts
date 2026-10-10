@@ -38,7 +38,7 @@ import { isWebUrl, opensInDefaultApp } from '@shared/external'
 import type { DirEntry, SessionInfo, SkillInfo } from '@shared/ipc'
 import { SessionNames } from './services/session-names'
 import type { MCPServer } from '@shared/ipc'
-import { maskServer, unmaskServer } from '@shared/mcp-secrets'
+import { hasMasked, maskServer, unmaskServer } from '@shared/mcp-secrets'
 
 // One packaged instance: a second one would drain the same hook spool (userData/events) and take the first one's
 // events. It leaves before any service starts. Dev runs are left out: electron-vite starts the new app before the old
@@ -295,7 +295,13 @@ ipcMain.handle('mcp:linked', (_e, root: string) => masked(links.load(root).flatM
 ipcMain.handle('mcp:user', () => masked(mcp.user()))
 ipcMain.handle('mcp:local', (_e, root: string) => masked(mcp.local(root)))
 ipcMain.handle('mcp:library', (_e, root: string | null) => masked(mcp.library(root, [...settings.get().openProjects, ...settings.get().recentProjects])))
-ipcMain.handle('mcp:write', (_e, { server, root, replacing }) => ok(() => mcp.write(unmasked(server, root), root, replacing)))
+ipcMain.handle('mcp:write', (_e, { server, root, replacing }) => ok(() => {
+  // .mcp.json is shared with the project (committed): the secrets of a server copied from elsewhere (personal, local, another
+  // project) are not written there; the user types them, or an environment variable (\${VAR}) Claude Code expands
+  const own = server?.ref && typeof root === 'string' && resolve(server.ref.path) === resolve(join(root, '.mcp.json'))
+  if (hasMasked(server) && !own) throw new Error('Secrets non copiés dans .mcp.json (fichier partagé du projet) : remplace les valeurs masquées par une variable d’environnement (${NOM}) ou retape-les.')
+  return mcp.write(unmasked(server, root), root, replacing)
+}))
 ipcMain.handle('mcp:addUser', async (_e, { server, cwd }: { server: MCPServer; cwd: string | null }) => {
   let real: MCPServer
   try { real = unmasked(server, cwd) } catch (e) { return { code: 1, output: (e as Error).message } }

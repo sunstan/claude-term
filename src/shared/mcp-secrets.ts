@@ -60,6 +60,8 @@ export function unmaskServer(next: MCPServer, stored: MCPServer | null): MCPServ
     const out: Record<string, string> = {}
     for (const [k, v] of Object.entries(n)) {
       if (!v.includes(MASK)) { out[k] = v; continue }
+      // an edit around the mask would be lost under the stored value: the secret is typed again instead
+      if (v !== MASK) throw new Error(`Valeur masquée modifiée : retape le secret (${k})`)
       if (o?.[k] === undefined) throw new Error(`Valeur masquée sans source : ${k}`)
       out[k] = o[k]
     }
@@ -84,4 +86,9 @@ export function unmaskServer(next: MCPServer, stored: MCPServer | null): MCPServ
   })()
   const { secrets: _s, ref: _r, ...rest } = next
   return { ...rest, env: fromRecord(next.env, stored?.env), headers: fromRecord(next.headers, stored?.headers), args, url }
+}
+
+/** Whether a server as the renderer sends it still has masked values (secrets to take back from its source). */
+export function hasMasked(s: MCPServer): boolean {
+  return [...Object.values(s.env ?? {}), ...Object.values(s.headers ?? {}), ...(s.args ?? []), s.url ?? ''].some((v) => typeof v === 'string' && v.includes(MASK))
 }

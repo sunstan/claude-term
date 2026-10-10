@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { MASK, isSecretName, maskServer, unmaskServer } from '../src/shared/mcp-secrets'
+import { MASK, isSecretName, maskServer, unmaskServer, hasMasked } from '../src/shared/mcp-secrets'
 import type { MCPServer } from '../src/shared/ipc'
 
 const server = (o: Partial<MCPServer>): MCPServer => ({ name: 'x', transport: 'stdio', command: 'npx', args: [], url: '', env: {}, headers: {}, scope: 'project', sourcePath: '/p/.mcp.json', disabled: false, ...o })
@@ -40,5 +40,14 @@ describe('MCP secrets', () => {
     expect(() => unmaskServer(m, null)).toThrow()
     expect(() => unmaskServer({ ...m, url: `https://other/x?token=${MASK}` }, stored)).toThrow(/retape/)
     expect(unmaskServer({ ...m, url: 'https://h/x?token=U9' }, stored).url).toBe('https://h/x?token=U9')
+  })
+
+  it('refuses an edit around a masked value, tells a server still carrying masks', () => {
+    const stored = { name: 's', scope: 'project', command: 'x', args: [], env: { API_KEY: 'sk-1' }, headers: {}, url: '' } as any
+    const masked = maskServer(stored)
+    expect(hasMasked(masked)).toBe(true)
+    expect(hasMasked(stored)).toBe(false)
+    expect(() => unmaskServer({ ...masked, env: { API_KEY: masked.env.API_KEY + 'x' } }, stored)).toThrow(/retape/)
+    expect(unmaskServer(masked, stored).env.API_KEY).toBe('sk-1')
   })
 })
