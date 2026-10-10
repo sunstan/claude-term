@@ -274,7 +274,8 @@ export interface CtApi {
     /** the tab currently visible (for notification and attention decisions) */
     visibleTab(tabId: string | null): void
     onFocusTab(cb: (tabId: string) => void): () => void
-    hooksInstalled(): Promise<boolean>
+    /** 'partial': installed before an event was added, the settings offer the update */
+    hooksInstalled(): Promise<'none' | 'partial' | 'all'>
     setHooksInstalled(on: boolean): Promise<{ ok: boolean; error?: string }>
   }
   setHooks(on: boolean): Promise<{ ok: boolean; error?: string }>

@@ -173,8 +173,8 @@ and **Linear** (API key in secrets, GraphQL, "Mes issues", "Démarrer avec Claud
   file created after the tab start.
 - Files touched + diffs: `~/.claude/file-history/<session>` backups, and `toolUseResult.bashEditDiff`.
 - Plans: `~/.claude/plans`. Sessions index: `sessions-index.json` (deletion allowed).
-- Hooks `Notification`, `Stop` and `SessionStart` installed only from settings (an install that lacks an event gets
-  it at start), spooling events into `userData/events`. Every terminal has `CLAUDETERM_TAB=<run>.<tab>`; the spool
+- Hooks `Notification`, `Stop` and `SessionStart` installed only from settings (an install that lacks an event is
+  shown there as to update, never changed at start), spooling events into `userData/events`. Every terminal has `CLAUDETERM_TAB=<run>.<tab>`; the spool
   file is named after it, so an event reaches the tab its claude runs in (then: transcript path, cwd). SessionStart
   binds the tab to its session: `startup` only while it has none (a `claude -p` that Claude runs inherits the tab),
   `clear` / `resume` / `compact` move it to their transcript, which may not be written yet.

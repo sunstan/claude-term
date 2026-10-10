@@ -19,13 +19,13 @@ export function SettingsPage({ onClose }: { onClose: () => void }) {
   const update = useUpdate((s) => s.state)
   const [themes, setThemes] = useState<ThemeSpec[]>([])
   const [fonts, setFonts] = useState<string[]>([])
-  const [hooks, setHooks] = useState<boolean | null>(null)
+  const [hooks, setHooks] = useState<'none' | 'partial' | 'all' | null>(null)
   const [hookError, setHookError] = useState<string | null>(null)
   useEffect(() => { window.ct.themes.list().then(setThemes); window.ct.claude.hooksInstalled().then(setHooks); installedMonoFonts().then(setFonts) }, [])
   const set = (patch: Parameters<typeof window.ct.settings.set>[0]) => window.ct.settings.set(patch)
   const toggleHooks = async (on: boolean) => {
     const r = await window.ct.setHooks(on)
-    if (r.ok) { setHooks(on); setHookError(null) } else setHookError(r.error ?? 'erreur')
+    if (r.ok) { setHooks(on ? 'all' : 'none'); setHookError(null) } else setHookError(r.error ?? 'erreur')
   }
   const sections: { id: Section; label: string }[] = [
     { id: 'general', label: t('Général') }, { id: 'apparence', label: t('Apparence') }, { id: 'editeur', label: t('Éditeur') }, { id: 'raccourcis', label: t('Raccourcis') },
@@ -113,10 +113,16 @@ export function SettingsPage({ onClose }: { onClose: () => void }) {
           {section === 'notifications' && (
             <>
               <Group title={t('Hooks Claude Code')}>
-                <Row label={t('Installer les hooks')} hint={t("Ajoute deux hooks (Notification, Stop) dans ~/.claude/settings.json qui signalent à ClaudeTerm les permissions en attente, les sessions inactives et les réponses terminées. Fonctionne aussi pour les sessions lancées hors de ClaudeTerm dans un dossier ouvert.")}>
-                  <Toggle checked={hooks === true} disabled={hooks === null} onChange={toggleHooks} />
+                <Row label={t('Installer les hooks')} hint={t("Ajoute trois hooks (Notification, Stop, SessionStart) dans ~/.claude/settings.json qui signalent à ClaudeTerm les permissions en attente, les sessions inactives et les réponses terminées, et rattachent l'onglet à sa session après /clear, une reprise ou une compaction. Fonctionne aussi pour les sessions lancées hors de ClaudeTerm dans un dossier ouvert.")}>
+                  <Toggle checked={hooks === 'all' || hooks === 'partial'} disabled={hooks === null} onChange={toggleHooks} />
                   {hookError && <div className="error">{hookError}</div>}
                 </Row>
+                {/* installed before SessionStart was added: offered here, never written at start */}
+                {hooks === 'partial' && (
+                  <Row label={t('Hooks à mettre à jour')} hint={t("Il manque SessionStart : sans lui, l'onglet ne suit pas sa session après /clear, une reprise ou une compaction.")}>
+                    <button className="btn primary" onClick={() => toggleHooks(true)}>{t('Mettre à jour')}</button>
+                  </Row>
+                )}
               </Group>
               <Group title={t('Alertes')}>
                 <Row label={t('Notifications système')} hint={t("Quand l'onglet n'est pas visible.")}><Toggle checked={settings.notifyOS} onChange={(v) => set({ notifyOS: v })} /></Row>

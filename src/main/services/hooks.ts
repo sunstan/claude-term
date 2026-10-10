@@ -34,7 +34,6 @@ export class HookHub {
     this.script = join(base, process.platform === 'win32' ? 'hook.cmd' : 'hook.sh')
     mkdirSync(this.dir, { recursive: true })
     this.installScript()
-    this.upgrade()
     try { this.watcher = watch(this.dir, () => this.drain()) } catch { setInterval(() => this.drain(), 2000) }
     this.drain()
   }
@@ -51,18 +50,15 @@ export class HookHub {
   get command(): string { return process.platform === 'win32' ? `"${this.script}"` : shellQuote(this.script) }
   private isOurs = (c: string) => c === this.command || c === this.script || c === `"${this.script}"`
 
-  /** Hooks installed before an event was added get it too: they were wanted, only the list grew. */
-  private upgrade() {
+  /**
+   * Which of our hooks settings.json has: 'partial' when installed before an event was added (SessionStart). Nothing is
+   * written at start: the settings offer the update, settings.json changes only on a user action.
+   */
+  installed(): 'none' | 'partial' | 'all' {
     const r = this.claudeSettings.read()
-    if (!r.ok) return
-    const have = HookHub.events.filter((ev) => this.claudeSettings.hasHook(r.data, ev, this.command))
-    if (have.length && have.length < HookHub.events.length) this.setInstalled(true)
-  }
-
-  installed(): boolean {
-    const r = this.claudeSettings.read()
-    if (!r.ok) return false
-    return HookHub.events.every((ev) => this.claudeSettings.hasHook(r.data, ev, this.command))
+    if (!r.ok) return 'none'
+    const have = HookHub.events.filter((ev) => this.claudeSettings.hasHook(r.data, ev, this.command)).length
+    return have === 0 ? 'none' : have < HookHub.events.length ? 'partial' : 'all'
   }
 
   setInstalled(on: boolean): { ok: boolean; error?: string } {

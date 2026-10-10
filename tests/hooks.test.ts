@@ -3,7 +3,9 @@ import { execFileSync } from 'node:child_process'
 import { existsSync, readdirSync, utimesSync } from 'node:fs'
 import { join } from 'node:path'
 import { TempDir } from './helpers'
-import { drainSpool, hookScript } from '../src/main/services/hooks'
+import { drainSpool, hookScript, HookHub } from '../src/main/services/hooks'
+import { ClaudeSettings } from '../src/main/services/claude-settings'
+import { readFileSync } from 'node:fs'
 
 describe('hook spool', () => {
   it('handles complete events in write order, keeps fresh partial files, drops stale ones', () => {
@@ -76,5 +78,31 @@ describe('hook spool', () => {
     expect(s).toContain('more > "%f%.tmp"')
     expect(s).toContain('move /y "%f%.tmp" "%f%.json" >nul')
     expect(s.split('\r\n').length).toBeGreaterThan(5)
+  })
+})
+
+describe('hook install state', () => {
+  it('reports a partial install and leaves settings.json alone until asked', () => {
+    const t = new TempDir()
+    const path = join(t.path, 'settings.json')
+    const cs = new ClaudeSettings(path)
+    const hub = (base: string) => new HookHub(cs, () => new Map(), () => {}, () => false, () => ({ notifyOS: false, dockBadge: false }), () => {}, () => null, base)
+    const a = hub(join(t.path, 'ud'))
+    expect(a.installed()).toBe('none')
+    // an install from before SessionStart: Notification and Stop only
+    const data: any = { model: 'opus' }
+    for (const ev of ['Notification', 'Stop']) cs.setHook(data, ev, a.command, true, () => false)
+    cs.write(data)
+    const before = readFileSync(path, 'utf8')
+    const b = hub(join(t.path, 'ud'))   // a new start of the app
+    expect(b.installed()).toBe('partial')
+    expect(readFileSync(path, 'utf8')).toBe(before)
+    expect(b.setInstalled(true).ok).toBe(true)
+    expect(b.installed()).toBe('all')
+    expect(JSON.parse(readFileSync(path, 'utf8')).model).toBe('opus')
+    b.setInstalled(false)
+    expect(b.installed()).toBe('none')
+    for (const h of [a, b]) (h as any).watcher?.close()
+    t.dispose()
   })
 })
