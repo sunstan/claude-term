@@ -49,7 +49,7 @@ export class Skills {
     const dir = join(base, name), path = join(dir, 'SKILL.md')
     if (existsSync(path)) throw new Error(`Le skill « ${name} » existe déjà`)
     mkdirSync(dir, { recursive: true })
-    writeFileSync(path, `---\nname: ${name}\ndescription: ${description}\n---\n# ${name}\n<!-- Instructions pour Claude : quand utiliser ce skill, étapes, contraintes. -->\n`)
+    writeFileSync(path, `---\nname: ${name}\ndescription: ${yamlString(description)}\n---\n# ${name}\n<!-- Instructions pour Claude : quand utiliser ce skill, étapes, contraintes. -->\n`)
     return path
   }
 
@@ -95,7 +95,7 @@ export class Skills {
     const dir = join(b.skills, name), path = join(dir, 'SKILL.md')
     if (existsSync(dir)) throw new Error(`Le skill « ${name} » existe déjà`)
     mkdirSync(dir, { recursive: true })
-    const head = text.startsWith('---') ? '' : `---\nname: ${name}\ndescription: ${firstLine(text).replace(/\s+/g, ' ').trim().slice(0, 200)}\n---\n`
+    const head = text.startsWith('---') ? '' : `---\nname: ${name}\ndescription: ${yamlString(firstLine(text).replace(/\s+/g, ' ').trim().slice(0, 200))}\n---\n`
     writeFileSync(path, head + text, { flag: 'wx' })
     return path
   }
@@ -141,3 +141,6 @@ function commands(dir: string, source: SkillInfo['source']): SkillInfo[] {
 export function skillName(s: string): string {
   return s.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 64)
 }
+
+/** A front matter value as a YAML double-quoted string: a ':' or a '#' in it no longer breaks the front matter. */
+export const yamlString = (s: string) => JSON.stringify(s)

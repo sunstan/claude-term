@@ -115,7 +115,9 @@ describe('skills', () => {
     t.write('dl/Notes de Release.md', '# Titre\nRédige les notes de version.\n')
     const imported = sk.importFrom(join(t.path, 'dl', 'Notes de Release.md'), proj)
     expect(imported).toBe(join(proj, '.claude', 'skills', 'notes-de-release', 'SKILL.md'))
-    expect(readFileSync(imported, 'utf8')).toBe('---\nname: notes-de-release\ndescription: Rédige les notes de version.\n---\n# Titre\nRédige les notes de version.\n')
+    expect(readFileSync(imported, 'utf8')).toBe('---\nname: notes-de-release\ndescription: "Rédige les notes de version."\n---\n# Titre\nRédige les notes de version.\n')
+    // listed with its description unquoted
+    expect(sk.project(proj).find((x) => x.name === 'notes-de-release')?.description).toBe('Rédige les notes de version.')
     t.write('dl/x/SKILL.md', '---\nname: Été 2026\n---\nbody\n')
     expect(sk.importFrom(join(t.path, 'dl', 'x', 'SKILL.md'), null)).toBe(join(t.path, '.claude', 'skills', 'ete-2026', 'SKILL.md'))
     expect(() => sk.importFrom(join(t.path, 'dl', 'lint-all'), proj)).toThrow(/existe déjà/)
