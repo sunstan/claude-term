@@ -1,8 +1,11 @@
 import { useWorkbench, type LeftActivity } from '@/stores/workbench'
 import type { KeyEventLike } from '@shared/keymap'
 
-/** A DOM keydown as the keymap reads it (AltGr is Ctrl+Alt on Windows: it types, it is never a shortcut). */
-export const keyEvent = (e: KeyboardEvent): KeyEventLike => ({ key: e.key, code: e.code, metaKey: e.metaKey, ctrlKey: e.ctrlKey, altKey: e.altKey, shiftKey: e.shiftKey, altGraph: e.getModifierState?.('AltGraph') })
+/**
+ * A DOM keydown as the keymap reads it (AltGr is Ctrl+Alt on Windows / Linux: it types, it is never a shortcut).
+ * Not on macOS, where ⌥ may be reported as AltGraph and is a shortcut modifier (⌥⌘S).
+ */
+export const keyEvent = (e: KeyboardEvent): KeyEventLike => ({ key: e.key, code: e.code, metaKey: e.metaKey, ctrlKey: e.ctrlKey, altKey: e.altKey, shiftKey: e.shiftKey, altGraph: window.ct.platform !== 'darwin' && !!e.getModifierState?.('AltGraph') })
 
 const PANELS: Record<string, LeftActivity> = { 'app.explorer': 'explorer', 'app.search': 'search', 'app.history': 'history', 'app.skills': 'skills', 'app.mcp': 'mcp', 'app.plugins': 'plugins', 'app.run': 'run' }
 
