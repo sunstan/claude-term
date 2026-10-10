@@ -1,7 +1,9 @@
-import { existsSync, readdirSync, readFileSync, writeFileSync, statSync, openSync, readSync, closeSync, fstatSync } from 'node:fs'
+import { existsSync, readdirSync, readFileSync, writeFileSync, statSync, openSync, readSync, closeSync, fstatSync, createReadStream } from 'node:fs'
 import { homedir } from 'node:os'
-import { join, basename, dirname } from 'node:path'
-import { encodeProjectPath, firstUserText, lastAiTitle, transcriptCwd, unifiedDiff, textOf, isInside, entryDetail, parseTranscript, transcriptImages, type EntryDetail, type ToolEvent } from '@shared/claude-format'
+import { join, basename, dirname, resolve } from 'node:path'
+import { readFile } from 'node:fs/promises'
+import { createInterface } from 'node:readline'
+import { encodeProjectPath, firstUserText, lastAiTitle, transcriptCwd, unifiedDiff, textOf, isInside, entryFinder, parseTranscript, type EntryDetail, type ToolEvent } from '@shared/claude-format'
 import type { SessionInfo, PlanInfo } from '@shared/ipc'
 
 /** Paths and readers for what Claude Code writes under ~/.claude. */
@@ -27,35 +29,36 @@ export class ClaudeData {
   /** A sub-agent's transcript: <project>/<session>/subagents/agent-<id>.jsonl, next to the session's. */
   subagentPath(transcript: string, agentId: string) { return join(dirname(transcript), basename(transcript, '.jsonl'), 'subagents', `agent-${agentId}.jsonl`) }
 
-  /** A transcript of ours to read on the renderer's request: under ~/.claude/projects, a .jsonl. */
-  private readable(path: unknown): path is string { return typeof path === 'string' && path.endsWith('.jsonl') && isInside(path, this.root) && existsSync(path) }
+  /** A transcript of ours to read on the renderer's request: a .jsonl under ~/.claude/projects, no `..` in the way. */
+  private readable(path: unknown): path is string {
+    return typeof path === 'string' && path.endsWith('.jsonl') && resolve(path) === path && isInside(path, this.root) && existsSync(path)
+  }
 
-  /** The whole of an activity entry, in the session or in one of its sub-agents. */
-  entryDetail(transcript: string, ref: string, agentId?: string): EntryDetail | null {
+  /**
+   * The whole of an activity entry, in the session or in one of its sub-agents. The transcript is streamed (it may be
+   * tens of MB) and the read stops at the entry, or at its tool's result.
+   */
+  async entryDetail(transcript: string, ref: string, agentId?: string): Promise<EntryDetail | null> {
     const path = agentId ? (/^[\w-]+$/.test(agentId) ? this.subagentPath(transcript, agentId) : '') : transcript
-    if (!this.readable(path) || typeof ref !== 'string') return null
-    return entryDetail(readFileSync(path, 'utf8').split('\n'), ref)
+    if (!this.readable(path) || typeof ref !== 'string' || !ref) return null
+    const find = entryFinder(ref)
+    const stream = createReadStream(path, { encoding: 'utf8' })
+    const lines = createInterface({ input: stream, crlfDelay: Infinity })
+    try {
+      for await (const l of lines) { const r = find.line(l); if (r !== undefined) return r }
+      return find.end()
+    } finally { lines.close(); stream.destroy() }
   }
 
   /** A sub-agent's activity, its description and type from the .meta.json beside it. */
-  subagent(transcript: string, agentId: string): { events: ToolEvent[]; agentType?: string; description?: string } | null {
-    if (!/^[\w-]+$/.test(agentId)) return null
+  async subagent(transcript: string, agentId: string): Promise<{ events: ToolEvent[]; agentType?: string; description?: string } | null> {
+    if (typeof agentId !== 'string' || !/^[\w-]+$/.test(agentId)) return null
     const path = this.subagentPath(transcript, agentId)
     if (!this.readable(path)) return null
-    const u = parseTranscript(readFileSync(path, 'utf8').split('\n'), { plansDir: this.plansDir, home: this.home })
+    const u = parseTranscript((await readFile(path, 'utf8')).split('\n'), { plansDir: this.plansDir, home: this.home })
     let meta: any = {}
-    try { meta = JSON.parse(readFileSync(path.replace(/\.jsonl$/, '.meta.json'), 'utf8')) } catch { /* none */ }
+    try { meta = JSON.parse(await readFile(path.replace(/\.jsonl$/, '.meta.json'), 'utf8')) } catch { /* none */ }
     return { events: u.events, ...(typeof meta.agentType === 'string' ? { agentType: meta.agentType } : {}), ...(typeof meta.description === 'string' ? { description: meta.description } : {}) }
-  }
-
-  /** The session's images as data URLs (its sub-agents' too), latest last. */
-  images(transcript: string): { url: string; time: string }[] {
-    if (!this.readable(transcript)) return []
-    const files = [transcript]
-    const dir = join(dirname(transcript), basename(transcript, '.jsonl'), 'subagents')
-    try { for (const n of readdirSync(dir)) if (n.endsWith('.jsonl')) files.push(join(dir, n)) } catch { /* no sub-agents */ }
-    return files.flatMap((f) => transcriptImages(readFileSync(f, 'utf8').split('\n')))
-      .sort((a, b) => a.time.localeCompare(b.time)).slice(-60).map((i) => ({ url: `data:${i.mediaType};base64,${i.data}`, time: i.time }))
   }
 
   /** Newest transcript of `cwd` created (or, with allowExisting, modified) after `after`, not already claimed. */

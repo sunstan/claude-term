@@ -59,7 +59,6 @@ const api: CtApi = {
     readText: (path) => ipcRenderer.invoke('claude:readText', path),
     entryDetail: (transcript, ref, agentId) => ipcRenderer.invoke('claude:entryDetail', { transcript, ref, agentId }),
     subagent: (transcript, agentId) => ipcRenderer.invoke('claude:subagent', { transcript, agentId }),
-    images: (transcript) => ipcRenderer.invoke('claude:images', transcript),
     onAttention: (cb) => channel('claude:attention', () => true, (p) => p, cb),
     clearAttention: (tabId) => ipcRenderer.send('claude:clearAttention', { tabId }),
     turnEnded: (tabId) => ipcRenderer.send('claude:turnEnded', { tabId }),

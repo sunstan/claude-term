@@ -59,14 +59,10 @@ export interface SessionState {
   model?: string
   /** reasoning effort (last assistant message, or a /effort typed since) */
   effort?: string
-  /** the transcript followed (entry details, sub-agents and images are read from it on demand) */
+  /** the transcript followed (entry details and sub-agents are read from it on demand) */
   transcriptPath?: string
   /** tool_use id → the sub-agent that call started */
   agents: Record<string, import('./claude-format').AgentLink>
-  /** prompts typed while a turn runs, waiting for it (Claude Code's queue) */
-  queue: string[]
-  /** images in the session (pasted, or returned by tools) */
-  images: number
   contextTokens?: number
   planPath?: string
   planText: string
@@ -281,8 +277,6 @@ export interface CtApi {
     entryDetail(transcript: string, ref: string, agentId?: string): Promise<import('./claude-format').EntryDetail | null>
     /** a sub-agent's activity, with its type and description */
     subagent(transcript: string, agentId: string): Promise<{ events: import('./claude-format').ToolEvent[]; agentType?: string; description?: string } | null>
-    /** the session's images (its sub-agents' too) as data URLs */
-    images(transcript: string): Promise<{ url: string; time: string }[]>
     onAttention(cb: (u: { tabId: string; attention: Attention | null }) => void): () => void
     clearAttention(tabId: string): void
     /** a Claude turn ended out of sight (the terminal title): the tab is marked done, like the Stop hook does */

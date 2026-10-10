@@ -22,8 +22,8 @@ Handoff for the next session. Design: `docs/DESIGN.md`. Working rules: `CLAUDE.m
   Session binding through the hooks (SessionStart, `CLAUDETERM_TAB`), tab state from Claude's terminal title (working
   pulse, done when a turn ends out of sight), effort in the bubble, tab rename. Activité: an entry opens in full (tool
   input and result, or the text, read from the transcript on demand by `ref`), Agent / Task calls open the sub-agent's
-  activity (`<session>/subagents/agent-<id>.jsonl`, breadcrumb back; its writes count in Fichiers), the prompt queue
-  (queue-operation replayed by `applyQueue`) above the list; Images mode: the session's images, sub-agents included.
+  activity (`<session>/subagents/agent-<id>.jsonl`, breadcrumb back; its writes count in Fichiers). Details are streamed
+  from the transcript (the read stops at the entry).
 - **Editor**: Monaco tabs, dirty by content, auto save on focus loss, confirm on close, reload on external change,
   images, markdown code / split / preview (floating switch, moves under the find bar), JetBrains-like find /
   replace bar (⌘F / ⌘R), side-by-side diff tabs, separate editor fonts, format on save option.

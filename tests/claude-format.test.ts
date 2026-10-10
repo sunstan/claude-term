@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { encodeProjectPath, parseTranscript, completeLines, diffStats, unifiedDiff, firstUserText, lastAiTitle, isEmptyUpdate, joinPath, isInside, applyQueue, entryDetail, transcriptImages } from '../src/shared/claude-format'
+import { encodeProjectPath, parseTranscript, completeLines, diffStats, unifiedDiff, firstUserText, lastAiTitle, isEmptyUpdate, joinPath, isInside, entryDetail } from '../src/shared/claude-format'
 
 const opts = { plansDir: '/Users/j/.claude/plans', home: '/Users/j' }
 const jsonl = (objs: object[]) => objs.map((o) => JSON.stringify(o))
@@ -104,24 +104,14 @@ describe('transcript parsing', () => {
     expect(u.events).toHaveLength(0)
     expect(parseTranscript(jsonl([{ type: 'user', message: { content: '<command-name>/model</command-name><command-args>fable</command-args>' } }]), opts).effort).toBeUndefined()
   })
-  it('keeps where entries are, the sub-agents calls start, the queue and the images', () => {
+  it('keeps where entries are and the sub-agents calls start', () => {
     const u = parseTranscript(jsonl([
       { type: 'user', uuid: 'u1', message: { content: [{ type: 'text', text: 'regarde' }, { type: 'image', source: { type: 'base64', media_type: 'image/png', data: 'AAAA' } }] } },
       { type: 'assistant', uuid: 'a1', message: { content: [{ type: 'text', text: 'ok' }, { type: 'tool_use', id: 'tu1', name: 'Agent', input: { description: 'explore' } }] } },
-      { type: 'queue-operation', operation: 'enqueue', content: 'et ensuite ?' },
       { type: 'user', uuid: 'u2', toolUseResult: { agentId: 'abc123', description: 'explore', status: 'async_launched' }, message: { content: [{ type: 'tool_result', tool_use_id: 'tu1', content: [{ type: 'image', source: { type: 'base64', media_type: 'image/png', data: 'BB' } }] }] } },
     ]), opts)
     expect(u.events.map((e) => [e.kind, e.ref, e.toolId])).toEqual([['user', 'u1', undefined], ['text', 'a1:0', undefined], ['Agent', 'a1:1', 'tu1']])
     expect(u.agents).toEqual({ tu1: { agentId: 'abc123', description: 'explore' } })
-    expect(u.queueOps).toEqual([{ op: 'enqueue', content: 'et ensuite ?' }])
-    expect(u.images).toBe(2)
-  })
-  it('replays the prompt queue', () => {
-    expect(applyQueue([], [{ op: 'enqueue', content: 'a' }, { op: 'enqueue', content: 'b' }, { op: 'enqueue', content: 'c' }])).toEqual(['a', 'b', 'c'])
-    expect(applyQueue(['a', 'b', 'c'], [{ op: 'remove', content: 'b' }])).toEqual(['a', 'c'])
-    expect(applyQueue(['a', 'c'], [{ op: 'dequeue' }])).toEqual(['c'])
-    expect(applyQueue(['a', 'c'], [{ op: 'popAll' }])).toEqual([])
-    expect(applyQueue([], [{ op: 'dequeue' }, { op: 'remove', content: 'x' }])).toEqual([])
   })
   it('reads an entry in full: a tool call with its result, a text, a prompt', () => {
     const lines = jsonl([
@@ -134,14 +124,6 @@ describe('transcript parsing', () => {
     expect(entryDetail(lines, 'a1:1')).toEqual({ kind: 'tool', name: 'Bash', input: '{\n  "command": "npm test"\n}', output: '1 failed', isError: true, truncated: false })
     expect(entryDetail(lines.slice(0, 2), 'a1:1')).toMatchObject({ kind: 'tool', output: '' })
     expect(entryDetail(lines, 'nope:0')).toBeNull()
-  })
-  it('lists the images, latest last', () => {
-    const lines = jsonl([
-      { type: 'user', timestamp: 't1', message: { content: [{ type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: 'J' } }] } },
-      { type: 'user', timestamp: 't2', message: { content: [{ type: 'tool_result', tool_use_id: 'x', content: [{ type: 'image', source: { type: 'base64', media_type: 'image/png', data: 'P' } }] }] } },
-    ])
-    expect(transcriptImages(lines)).toEqual([{ mediaType: 'image/jpeg', data: 'J', time: 't1' }, { mediaType: 'image/png', data: 'P', time: 't2' }])
-    expect(transcriptImages(lines, 1)).toHaveLength(1)
   })
   it('parses bash edit diffs', () => {
     const u = parseTranscript(jsonl([{ type: 'user', message: { content: 'x' }, toolUseResult: { bashEditDiff: { files: [{ filePath: '/p/f', hunks: [{ oldStart: 1, oldLines: 1, newStart: 1, newLines: 1, lines: ['-a', '+b'] }] }] } } }]), opts)

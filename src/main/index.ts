@@ -143,7 +143,6 @@ ipcMain.handle('claude:sessionDiff', (_e, { path, backupName, sessionId }) => cl
 ipcMain.handle('claude:readText', (_e, path: string) => claudeData.readText(path))
 ipcMain.handle('claude:entryDetail', (_e, { transcript, ref, agentId }) => claudeData.entryDetail(transcript, ref, agentId))
 ipcMain.handle('claude:subagent', (_e, { transcript, agentId }) => claudeData.subagent(transcript, agentId))
-ipcMain.handle('claude:images', (_e, transcript: string) => claudeData.images(transcript))
 
 // hooks → attention, notifications, dock badge
 let visibleTab: string | null = null

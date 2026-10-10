@@ -48,7 +48,6 @@ export function SessionBlock({ project, collapsed, onCollapse }: { project: Proj
       {modeBtn('plan', t('Plan'), !!session?.planMode)}
       {modeBtn('activity', t('Activité'), (session?.runningTools.length ?? 0) > 0)}
       {modeBtn('files', t('Fichiers'), false, Object.keys(session?.files ?? {}).length)}
-      {(session?.images ?? 0) > 0 && modeBtn('images', t('Images'), false, session!.images)}
       <span className="vsep" />
       {modeBtn('errors', t('Erreurs'), checking, errorCount)}
       {modeBtn('todo', t('TODO'), false, todoCount)}
@@ -62,7 +61,7 @@ export function SessionBlock({ project, collapsed, onCollapse }: { project: Proj
         <PluginViewBody model={pluginModel} wide layoutKey={mode} send={(type, extra) => window.ct.plugins.event({ viewId: mode, type, ...extra })} />
       ) : !tab || !session ? (
         <Empty>{t('Sélectionne un onglet Claude, ou tape claude dans un shell')}</Empty>
-      ) : mode === 'plan' ? <PlanView tab={tab} /> : mode === 'activity' ? <ActivityView tab={tab} /> : mode === 'images' ? <ImagesView tab={tab} /> : <FilesView tab={tab} />}
+      ) : mode === 'plan' ? <PlanView tab={tab} /> : mode === 'activity' ? <ActivityView tab={tab} /> : <FilesView tab={tab} />}
     </Island>
   )
 }
@@ -121,15 +120,13 @@ function ActivityView({ tab }: { tab: Tab }) {
   const s = tab.session!
   const [drill, setDrill] = useState<{ agentId: string; description?: string } | null>(null)
   const [sub, setSub] = useState<{ events: ToolEvent[]; agentType?: string } | null>(null)
-  // a sub-agent's activity, read again while it runs
+  // a sub-agent's activity: linked once its call returned, so read once
   useEffect(() => {
     setSub(null)
     if (!drill || !s.transcriptPath) return
     let live = true
-    const load = () => window.ct.claude.subagent(s.transcriptPath!, drill.agentId).then((r) => { if (live) setSub(r) })
-    load()
-    const timer = setInterval(load, 2500)
-    return () => { live = false; clearInterval(timer) }
+    window.ct.claude.subagent(s.transcriptPath, drill.agentId).then((r) => { if (live) setSub(r) })
+    return () => { live = false }
   }, [drill?.agentId, s.transcriptPath])
   useEffect(() => { setDrill(null) }, [s.sessionId])
   const events = drill ? sub?.events ?? [] : s.events
@@ -146,12 +143,6 @@ function ActivityView({ tab }: { tab: Tab }) {
         <span className="spacer" />
         {!drill && <span className="muted">{s.inputTokens.toLocaleString()} ↓ {s.outputTokens.toLocaleString()} ↑</span>}
       </div>
-      {!drill && s.queue.length > 0 && (
-        <div className="queue-strip" title={s.queue.join('\n\n')}>
-          <span className="badge accent">{t('En attente')} · {s.queue.length}</span>
-          <span className="queue-items">{s.queue.map((q, i) => <span key={i} className="queue-item">{q.replace(/\s+/g, ' ').slice(0, 120)}</span>)}</span>
-        </div>
-      )}
       <div className="events">
         {events.length === 0 && <Empty>{drill && !sub ? t('Lecture du sous-agent…') : t('Rien pour l\'instant')}</Empty>}
         {events.map((e) => <EventRow key={e.id} e={e} tab={tab} agentId={drill?.agentId} onDrill={drill ? undefined : (a) => setDrill(a)} />)}
@@ -202,21 +193,6 @@ function EntryDetailView({ detail }: { detail: EntryDetail | null | undefined })
   )
 }
 
-/** The session's images (pasted, or returned by tools; sub-agents' too); a click shows one large. */
-function ImagesView({ tab }: { tab: Tab }) {
-  const s = tab.session!
-  const [images, setImages] = useState<{ url: string; time: string }[] | null>(null)
-  const [big, setBig] = useState<string | null>(null)
-  useEffect(() => { if (s.transcriptPath) window.ct.claude.images(s.transcriptPath).then(setImages) }, [s.transcriptPath, s.images])
-  if (!images) return <Empty>{t('Lecture…')}</Empty>
-  if (!images.length) return <Empty>{t('Aucune image dans cette session')}</Empty>
-  return (
-    <div className="images-grid">
-      {images.map((im, i) => <button key={i} className="thumb" title={im.time ? new Date(im.time).toLocaleString() : undefined} onClick={() => setBig(im.url)}><img src={im.url} alt="" loading="lazy" /></button>)}
-      {big && <div className="modal-backdrop" onMouseDown={() => setBig(null)}><img className="image-big" src={big} alt="" /></div>}
-    </div>
-  )
-}
 
 function EndAnchor({ dep }: { dep: number }) {
   const [el, setEl] = useState<HTMLDivElement | null>(null)

@@ -19,16 +19,10 @@ export interface ToolEvent {
 /** A sub-agent an Agent / Task call started: its transcript is <session>/subagents/agent-<agentId>.jsonl. */
 export interface AgentLink { agentId: string; description?: string }
 
-/** One change to Claude Code's prompt queue (prompts typed while a turn runs). */
-export interface QueueOp { op: string; content?: string }
-
 export interface TranscriptUpdate {
   events: ToolEvent[]
   /** tool_use id → the sub-agent it started */
   agents: Record<string, AgentLink>
-  queueOps: QueueOp[]
-  /** images in the new lines (pasted, or returned by tools) */
-  images: number
   inputTokens: number
   outputTokens: number
   /** model of the last assistant message (as the API names it: no [1m] suffix) */
@@ -50,13 +44,13 @@ export interface TranscriptUpdate {
 }
 
 export function emptyUpdate(): TranscriptUpdate {
-  return { events: [], agents: {}, queueOps: [], images: 0, inputTokens: 0, outputTokens: 0, startedTools: [], finishedTools: [], backups: {}, bashDiffs: {} }
+  return { events: [], agents: {}, inputTokens: 0, outputTokens: 0, startedTools: [], finishedTools: [], backups: {}, bashDiffs: {} }
 }
 
 export function isEmptyUpdate(u: TranscriptUpdate): boolean {
   return u.events.length === 0 && u.inputTokens === 0 && u.outputTokens === 0 && u.planPath === undefined
     && u.planMode === undefined && u.aiTitle === undefined && u.permissionMode === undefined && u.model === undefined && u.contextTokens === undefined
-    && u.effort === undefined && Object.keys(u.agents).length === 0 && u.queueOps.length === 0 && u.images === 0
+    && u.effort === undefined && Object.keys(u.agents).length === 0
     && u.startedTools.length === 0 && u.finishedTools.length === 0
     && Object.keys(u.backups).length === 0 && Object.keys(u.bashDiffs).length === 0
 }
@@ -91,24 +85,6 @@ export function textOf(content: unknown): string | null {
     return texts.length ? texts.join(' ') : null
   }
   return null
-}
-
-/** Image blocks in a message's content, tool results' content included. */
-function countImages(content: unknown): number {
-  if (!Array.isArray(content)) return 0
-  return content.reduce((n: number, c: any) => n + (c?.type === 'image' ? 1 : c?.type === 'tool_result' ? countImages(c.content) : 0), 0)
-}
-
-/** The prompt queue after `ops` (enqueue adds, dequeue takes the first, remove takes the one it names, popAll empties). */
-export function applyQueue(queue: string[], ops: QueueOp[]): string[] {
-  const q = [...queue]
-  for (const o of ops) {
-    if (o.op === 'enqueue' && o.content !== undefined) q.push(o.content)
-    else if (o.op === 'dequeue') q.shift()
-    else if (o.op === 'remove') { const i = o.content === undefined ? -1 : q.indexOf(o.content); if (i >= 0) q.splice(i, 1); else q.shift() }
-    else if (o.op === 'popAll') q.length = 0
-  }
-  return q
 }
 
 /**
@@ -183,9 +159,6 @@ export function parseTranscript(lines: string[], opts: { plansDir: string; home:
         })
         break
       }
-      case 'queue-operation':
-        if (typeof obj.operation === 'string') u.queueOps.push({ op: obj.operation, ...(typeof obj.content === 'string' ? { content: obj.content } : {}) })
-        break
       case 'user': {
         // prompts carry the mode they were sent in; a session started by /clear has no permission-mode record
         if (typeof obj.permissionMode === 'string') u.permissionMode = obj.permissionMode
@@ -213,7 +186,6 @@ export function parseTranscript(lines: string[], opts: { plansDir: string; home:
               if (r && typeof r.agentId === 'string' && /^[\w-]+$/.test(r.agentId)) u.agents[item.tool_use_id] = { agentId: r.agentId, ...(typeof r.description === 'string' ? { description: r.description } : {}) }
             }
           }
-          u.images += countImages(msg.content)
         }
         const t = textOf(msg.content)
         if (t && !t.startsWith('<')) u.events.push({ id: ++eventSeq, time, kind: 'user', detail: oneLine(t), file: null, ...(typeof obj.uuid === 'string' ? { ref: obj.uuid } : {}) })
@@ -241,50 +213,43 @@ function resultText(content: unknown): string {
   return content.map((c: any) => (c?.type === 'text' && typeof c.text === 'string' ? c.text : c?.type ? `[${c.type}]` : '')).join('\n')
 }
 
-/** Finds the entry `ref` points at ("<uuid>:<index>", or "<uuid>" for a prompt) in transcript lines. */
-export function entryDetail(lines: string[], ref: string): EntryDetail | null {
+/**
+ * Finds the entry `ref` points at ("<uuid>:<index>", or "<uuid>" for a prompt), fed the transcript's lines in order:
+ * `line` returns the detail once known (a tool's waits for its result), `end` what was found when the lines run out.
+ * The main process streams a transcript through it and stops at the first answer.
+ */
+export function entryFinder(ref: string): { line(line: string): EntryDetail | null | undefined; end(): EntryDetail | null } {
   const [uuid, idx] = ref.split(':')
-  let found: any = null
-  for (const line of lines) {
-    if (!line.includes(uuid) && !found) continue
-    let o: any
-    try { o = JSON.parse(line) } catch { continue }
-    if (!found) {
-      if (o?.uuid !== uuid) continue
-      if (o.type === 'user') return { kind: 'user', text: textOf(o.message?.content) ?? '' }
-      const item = Array.isArray(o.message?.content) ? o.message.content[Number(idx)] : undefined
-      if (!item) return null
-      if (item.type === 'text') return { kind: 'text', text: String(item.text ?? '') }
-      if (item.type !== 'tool_use') return null
-      found = { name: String(item.name ?? '?'), id: item.id, input: JSON.stringify(item.input ?? {}, null, 2) }
-      continue
-    }
-    // the tool's result comes in a later user record
-    const res = Array.isArray(o?.message?.content) ? o.message.content.find((c: any) => c?.type === 'tool_result' && c.tool_use_id === found.id) : undefined
-    if (!res) continue
-    const out = resultText(res.content)
-    return { kind: 'tool', name: found.name, input: found.input.slice(0, MAX_DETAIL), output: out.slice(0, MAX_DETAIL), isError: !!res.is_error, truncated: out.length > MAX_DETAIL || found.input.length > MAX_DETAIL }
+  let found: { name: string; id: unknown; input: string } | null = null
+  const tool = (output: string, isError: boolean): EntryDetail =>
+    ({ kind: 'tool', name: found!.name, input: found!.input.slice(0, MAX_DETAIL), output: output.slice(0, MAX_DETAIL), isError, truncated: output.length > MAX_DETAIL || found!.input.length > MAX_DETAIL })
+  return {
+    line(line) {
+      if (!found && !line.includes(uuid)) return undefined
+      let o: any
+      try { o = JSON.parse(line) } catch { return undefined }
+      if (!found) {
+        if (o?.uuid !== uuid) return undefined
+        if (o.type === 'user') return { kind: 'user', text: textOf(o.message?.content) ?? '' }
+        const item = Array.isArray(o.message?.content) ? o.message.content[Number(idx)] : undefined
+        if (!item || (item.type !== 'text' && item.type !== 'tool_use')) return null
+        if (item.type === 'text') return { kind: 'text', text: String(item.text ?? '') }
+        found = { name: String(item.name ?? '?'), id: item.id, input: JSON.stringify(item.input ?? {}, null, 2) }
+        return undefined
+      }
+      // the tool's result comes in a later user record
+      const res = Array.isArray(o?.message?.content) ? o.message.content.find((c: any) => c?.type === 'tool_result' && c.tool_use_id === found!.id) : undefined
+      return res ? tool(resultText(res.content), !!res.is_error) : undefined
+    },
+    end: () => (found ? tool('', false) : null),
   }
-  return found ? { kind: 'tool', name: found.name, input: found.input.slice(0, MAX_DETAIL), output: '', isError: false, truncated: false } : null
 }
 
-/** The images of a transcript (pasted or returned by tools), latest last, at most `limit`. */
-export function transcriptImages(lines: string[], limit = 60): { mediaType: string; data: string; time: string }[] {
-  const out: { mediaType: string; data: string; time: string }[] = []
-  const walk = (c: unknown, time: string) => {
-    if (!Array.isArray(c)) return
-    for (const b of c as any[]) {
-      if (b?.type === 'image' && b.source?.type === 'base64' && typeof b.source.data === 'string') out.push({ mediaType: String(b.source.media_type ?? 'image/png'), data: b.source.data, time })
-      else if (b?.type === 'tool_result') walk(b.content, time)
-    }
-  }
-  for (const line of lines) {
-    if (!line.includes('"image"')) continue
-    let o: any
-    try { o = JSON.parse(line) } catch { continue }
-    if (o?.type === 'user') walk(o.message?.content, String(o.timestamp ?? ''))
-  }
-  return out.slice(-limit)
+/** The entry `ref` points at in transcript lines (see entryFinder). */
+export function entryDetail(lines: string[], ref: string): EntryDetail | null {
+  const f = entryFinder(ref)
+  for (const l of lines) { const r = f.line(l); if (r !== undefined) return r }
+  return f.end()
 }
 
 /** Splits a chunk into complete lines; the remainder (no trailing newline) is returned separately. */
