@@ -598,6 +598,5 @@ input[type=checkbox]:disabled { opacity: .4; }
 .memo-form-btns { display: flex; justify-content: flex-end; gap: 6px; }
 .memo-form .error, .memo-tab > .error { color: var(--ct-badge-error); font-size: 11px; }
 
-/* activity bars: the icons' labels (SideTips), beside the bar toward the window's middle */
-.side-tip { position: fixed; z-index: 200; transform: translateY(-50%); padding: 4px 8px; border-radius: 5px; background: var(--ct-island-bg); border: 1px solid var(--ct-island-border); color: var(--ct-text); font-size: 12px; white-space: nowrap; pointer-events: none; }
-.side-tip.right { transform: translate(-100%, -50%); }
+/* tooltips (Tooltips): every title in the app, placed once measured */
+.tooltip { position: fixed; z-index: 300; left: 0; top: 0; visibility: hidden; max-width: 420px; padding: 4px 8px; border-radius: 5px; background: var(--ct-island-bg); border: 1px solid var(--ct-island-border); color: var(--ct-text); font-size: 12px; line-height: 1.35; white-space: pre-line; overflow-wrap: anywhere; pointer-events: none; text-transform: none; letter-spacing: 0; font-weight: 400; }

@@ -5,7 +5,7 @@ import { useWorkbench, useActiveProject, isClaude, type Tab } from './stores/wor
 import { applyTheme } from './theme/apply'
 import { Icons } from './workbench/icons'
 import { LeftActivityBar, RightActivityBar } from './workbench/ActivityBar'
-import { SideTips } from './workbench/SideTip'
+import { Tooltips } from './workbench/Tooltips'
 import { LeftSidebar, RightSidebar } from './workbench/Sidebars'
 import { Center } from './workbench/Center'
 import { Welcome } from './workbench/Welcome'
@@ -108,7 +108,7 @@ export function App() {
       {popovers.map((p) => <PluginPopover key={p.id} id={p.id} anchorViewId={p.anchorViewId} model={p.model} onClose={() => closePopover(p.id)} />)}
       {prompt && <PromptModal req={prompt} onDone={(v) => { window.ct.plugins.promptReply(prompt.id, v); setPrompt(null) }} />}
       <Palette />
-      <SideTips />
+      <Tooltips />
       {showSettings && (
         <div className="modal-backdrop" onMouseDown={(e) => { if (e.target === e.currentTarget) setShowSettings(false) }}>
           <div className="modal"><SettingsPage onClose={() => setShowSettings(false)} /></div>
