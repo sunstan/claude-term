@@ -147,8 +147,11 @@ and **Linear** (API key in secrets, GraphQL, "Mes issues", "Démarrer avec Claud
 
 ### 7.1 Distribution and catalogue (decided 2026-09-27)
 
-- Built-in plugins live in the app repo (`resources/plugins`); every other plugin has **its own repo** and
-  publishes a `.tgz` (release asset or GitHub archive) with `plugin.json` at the root or under one top folder.
+- Built-in plugins live in the app repo (`resources/plugins`); the others live in the **monorepo**
+  `sunstan/claudeterm-plugins` (`plugins/<id>/`, decided 2026-10-10): anyone adds one by pull request (checked by
+  its `validate` workflow, read before merging); on main its `release` workflow publishes each new version as a
+  release `<id>@<version>` with a deterministic `.tgz` (`plugin.json` under one top folder) and writes `registry.json`.
+  A plugin hosted elsewhere is not in the catalogue, but installs by URL.
 - **Catalogue**: a `registry.json` fetched from `settings.pluginRegistry` (default: raw GitHub of
   `sunstan/claudeterm-plugins`, `main` branch; `https:`, `http://localhost` and `file:` accepted):
   `{ "version": 1, "plugins": [{ id, name, description, version, engine?, permissions, repo, url, sha256 }] }`.
