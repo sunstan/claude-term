@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { shellEscapePath, pathsForPrompt, pathFromFileUri, windowsQuotePath } from '../src/shared/paths'
+import { shellEscapePath, pathsForPrompt, pathFromFileUri, windowsQuotePath, pathShell, wslPath, windowsPathFromWsl } from '../src/shared/paths'
 describe('paths for the prompt', () => {
   it('escapes shell-special characters like a terminal drop', () => {
     expect(shellEscapePath('/Users/j/My Project/a (1).png')).toBe('/Users/j/My\\ Project/a\\ \\(1\\).png')
@@ -9,7 +9,30 @@ describe('paths for the prompt', () => {
   it('keeps Windows paths as Windows Terminal drops them', () => {
     expect(windowsQuotePath('C:\\Users\\j\\a.png')).toBe('C:\\Users\\j\\a.png')
     expect(windowsQuotePath('C:\\My Project\\a (1).png')).toBe('"C:\\My Project\\a (1).png"')
-    expect(pathsForPrompt(['C:\\x\\a.png', 'C:\\y z\\b.png'], true)).toBe('C:\\x\\a.png "C:\\y z\\b.png" ')
+    expect(pathsForPrompt(['C:\\x\\a.png', 'C:\\y z\\b.png'], 'windows')).toBe('C:\\x\\a.png "C:\\y z\\b.png" ')
+  })
+  it('keeps $ and ` literal for PowerShell: single quotes, a quote inside doubled', () => {
+    expect(windowsQuotePath('C:\\data\\$cache\\x.txt')).toBe("'C:\\data\\$cache\\x.txt'")
+    expect(windowsQuotePath("C:\\a`b\\it's.txt")).toBe("'C:\\a`b\\it''s.txt'")
+  })
+  it('hands WSL shells their own names for Windows paths, escaped for bash', () => {
+    expect(pathShell('darwin', 'wsl')).toBe('posix')
+    expect(pathShell('win32', 'native')).toBe('windows')
+    expect(pathShell('win32', 'wsl')).toBe('wsl')
+    expect(wslPath('C:\\Users\\me\\a.ts')).toBe('/mnt/c/Users/me/a.ts')
+    expect(wslPath('D:\\')).toBe('/mnt/d')
+    expect(wslPath('C:')).toBe('/mnt/c')
+    expect(wslPath('\\\\wsl$\\Ubuntu\\home\\me\\p')).toBe('/home/me/p')
+    expect(wslPath('\\\\wsl.localhost\\Ubuntu')).toBe('/')
+    expect(wslPath('/home/me')).toBe('/home/me')
+    expect(pathsForPrompt(['C:\\Users\\me\\a b.ts'], 'wsl')).toBe('/mnt/c/Users/me/a\\ b.ts ')
+  })
+  it('names the folders WSL reports the Windows way', () => {
+    expect(windowsPathFromWsl('/mnt/c/proj/x')).toBe('C:\\proj\\x')
+    expect(windowsPathFromWsl('/mnt/d')).toBe('D:\\')
+    expect(windowsPathFromWsl('/home/me/p', 'Ubuntu')).toBe('\\\\wsl$\\Ubuntu\\home\\me\\p')
+    expect(windowsPathFromWsl('/home/me/p')).toBe('/home/me/p')
+    expect(windowsPathFromWsl('C:\\x', 'Ubuntu')).toBe('C:\\x')
   })
 })
 

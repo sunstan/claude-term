@@ -62,4 +62,28 @@ describe('SessionTracker', () => {
     tracker.stop()
     t.dispose()
   }, 10_000)
+
+  it('resumes on the transcript path as the platform spells it; files under the plans folder are not the session ones', async () => {
+    const t = new TempDir()
+    const cwd = join(t.path, 'proj')
+    const dir = join(t.path, '.claude', 'projects', encodeProjectPath(cwd))
+    const data = new ClaudeData(t.path)
+    const plan = join(data.plansDir, 'p.md')
+    t.write(join(dir, 'sess.jsonl'), jsonl([
+      { type: 'assistant', timestamp: 't1', message: { content: [
+        { type: 'tool_use', id: 'x1', name: 'Write', input: { file_path: plan } },
+        { type: 'tool_use', id: 'x2', name: 'Edit', input: { file_path: join(cwd, 'a.ts') } },
+      ] } },
+    ]))
+    const claimed = new Set<string>()
+    const states: SessionState[] = []
+    const tracker = new SessionTracker('tab1', cwd, data, claimed, (_id, s) => states.push(structuredClone(s)), { resume: 'sess' })
+    await sleep(100)
+    // the path hooks report (join: backslashes on Windows), so attention reaches this tab
+    expect(tracker.transcriptPath).toBe(join(dir, 'sess.jsonl'))
+    expect(claimed.has(join(dir, 'sess.jsonl'))).toBe(true)
+    expect(Object.keys(states.at(-1)!.files)).toEqual([join(cwd, 'a.ts')])
+    tracker.stop()
+    t.dispose()
+  }, 10_000)
 })

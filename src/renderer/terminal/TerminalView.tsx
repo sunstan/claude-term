@@ -6,7 +6,7 @@ import type { ResolvedTheme } from '@shared/theme'
 import { OSC_SHELL } from '@shared/ipc'
 import * as pathsMod from '@shared/paths'
 const require_paths = () => pathsMod
-import { useWorkbench, type Tab } from '@/stores/workbench'
+import { useWorkbench, tabPathShell, type Tab } from '@/stores/workbench'
 
 /** Terminals live outside React (one xterm per tab), attached to the visible container. */
 const terminals = new Map<string, { term: Terminal; fit: FitAddon; el: HTMLDivElement; dispose: () => void }>()
@@ -58,7 +58,7 @@ export function getOrCreate(tab: Tab, theme: ResolvedTheme, fontFamily: string, 
     // ⌘V / Ctrl+V with an image on the clipboard: save it and type its path instead of pasting text
     term.attachCustomKeyEventHandler((e) => {
       if (e.type === 'keydown' && (e.metaKey || e.ctrlKey) && e.key === 'v' && !e.shiftKey) {
-        window.ct.attachments.clipboardImage().then((p) => { if (p) window.ct.pty.write(id, require_paths().pathsForPrompt([p], window.ct.platform === 'win32')) })
+        window.ct.attachments.clipboardImage().then((p) => { if (p) window.ct.pty.write(id, require_paths().pathsForPrompt([p], tabPathShell())) })
         return true   // text paste still goes through xterm's own handler
       }
       return true
@@ -82,7 +82,7 @@ export function getOrCreate(tab: Tab, theme: ResolvedTheme, fontFamily: string, 
           }
         }
       }
-      if (paths.length) { window.ct.pty.write(id, require_paths().pathsForPrompt(paths, window.ct.platform === 'win32')); term.focus() }
+      if (paths.length) { window.ct.pty.write(id, require_paths().pathsForPrompt(paths, tabPathShell())); term.focus() }
     })
     term.onResize(({ cols, rows }) => window.ct.pty.resize(id, cols, rows))
     // shell integration (start/end of commands) and cwd reports

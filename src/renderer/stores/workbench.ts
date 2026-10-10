@@ -3,7 +3,7 @@ import { isInteractiveClaude } from '@shared/models'
 import { reorder } from '@shared/order'
 import { clearLine, commandLine, dialectFor } from '@shared/shell'
 import { t } from '@/i18n'
-import { pathsForPrompt } from '@shared/paths'
+import { pathShell, pathsForPrompt, windowsPathFromWsl, wslPath } from '@shared/paths'
 import type { ResolvedTheme } from '@shared/theme'
 import type { Settings, TabKind, SessionState, Attention } from '@shared/ipc'
 
@@ -20,6 +20,8 @@ export interface Tab {
   busy: boolean
   /** a command a plugin started here (terminal.run), until it ends: started once the shell reports it */
   run?: { id: string; label?: string; started: boolean; at: number }
+  /** PowerShell: the integration bound the key that clears a pending line (PS_CLEAR_LINE) */
+  clearKey?: boolean
   lastCommand: string
   lastExit: number | null
   /** `claude` typed in a shell tab */
@@ -232,9 +234,9 @@ export const useWorkbench = create<Workbench>((set, get) => ({
     const p = get().projects.find((x) => x.id === projectId)
     const t = p?.tabs.find((x) => x.id === (tabId ?? p.currentTabId))
     if (t?.ptyId && t.kind !== 'file' && t.alive) {
-      window.ct.pty.write(t.ptyId, pathsForPrompt(paths, window.ct.platform === 'win32'))
+      window.ct.pty.write(t.ptyId, pathsForPrompt(paths, tabPathShell()))
       ;(await import('@/terminal/TerminalView')).focusTerminal(t.id)
-    } else await get().insertPrompt(projectId, pathsForPrompt(paths, window.ct.platform === 'win32'))
+    } else await get().insertPrompt(projectId, pathsForPrompt(paths, tabPathShell()))
   },
   async runCommand(projectId, cwd, cmds, tab = 'reuse', run) {
     const p = get().projects.find((x) => x.id === projectId)
@@ -251,9 +253,11 @@ export const useWorkbench = create<Workbench>((set, get) => ({
     get().setCurrentTab(projectId, target.id)
     const s = get().settings
     const dialect = dialectFor(window.ct.platform, s?.windowsMode ?? 'native')
-    const line = commandLine(dialect, cmds, target.cwd === cwd ? undefined : cwd)
+    // a WSL shell changes to the folder as WSL names it (tab.cwd keeps the Windows name, see setCwd)
+    const line = commandLine(dialect, cmds, target.cwd === cwd ? undefined : tabPathShell() === 'wsl' ? wslPath(cwd) : cwd)
     if (run) patchTab(set, target.id, () => ({ run: { id: run.id, label: run.label, started: false, at: Date.now() } }))
-    window.ct.pty.write(target.ptyId, clearLine(dialect) + line + '\r')
+    // PowerShell without PSReadLine has no such key: the line is typed as is rather than after stray characters
+    window.ct.pty.write(target.ptyId, (dialect === 'posix' || target.clearKey ? clearLine(dialect) : '') + line + '\r')
     ;(await import('@/terminal/TerminalView')).focusTerminal(target.id)
   },
   async captureScreen(projectId) {
@@ -346,6 +350,7 @@ export const useWorkbench = create<Workbench>((set, get) => ({
         }
         return { busy: true, lastCommand: rest, lastExit: null, ...(t.run ? { run: { ...t.run, started: true } } : {}) }
       }
+      if (kind === 'clearkey') return t.clearKey ? {} : { clearKey: true }
       if (kind === 'end') {
         if (t.claudeRunning) window.ct.claude.untrack(t.id)
         window.ct.plugins.commandEnd({ command: t.lastCommand, exit: rest === '' ? null : +rest })
@@ -421,8 +426,16 @@ export const useWorkbench = create<Workbench>((set, get) => ({
     window.ct.claude.visibleTab(id)
     if (id && document.hasFocus()) s.clearAttention(id)
   },
-  setCwd(tabId, cwd) { patchTab(set, tabId, (t) => (t.cwd === cwd ? {} : { cwd, title: name(cwd) })) },
+  setCwd(tabId, reported) {
+    // WSL shells report Linux paths: the tab keeps the Windows name the rest of the app compares and passes on
+    const s = get().settings
+    const cwd = tabPathShell() === 'wsl' ? windowsPathFromWsl(reported, s?.wslDistro || undefined) : reported
+    patchTab(set, tabId, (t) => (t.cwd === cwd ? {} : { cwd, title: name(cwd) }))
+  },
 }))
+
+/** How the terminal tabs read paths (Windows: native PowerShell / claude.exe, or WSL shells). */
+export function tabPathShell() { return pathShell(window.ct.platform, useWorkbench.getState().settings?.windowsMode) }
 
 function projectOf(s: Workbench, tabId: string): string {
   return s.projects.find((p) => p.tabs.some((t) => t.id === tabId))?.id ?? ''

@@ -5,7 +5,7 @@
  * prompt. Works with Windows PowerShell 5.1 and pwsh 7.
  */
 
-/** Typed by the app to clear the pending line: Ctrl+Shift+F12, bound to RevertLine by the script in every edit mode. */
+/** Typed by the app to clear the pending line: Ctrl+Shift+F12, bound to RevertLine by the script in every edit mode (it reports `clearkey` then). */
 export const PS_CLEAR_LINE = '\x1b[24;6~'
 
 export function powershellIntegration(osc: number): string {
@@ -19,6 +19,9 @@ export function powershellIntegration(osc: number): string {
     '  if (-not $ok) { $code = 1; if ($null -ne $global:LASTEXITCODE -and $global:LASTEXITCODE -ne 0 -and $global:LASTEXITCODE -ne $global:__ct.Exit) { $code = $global:LASTEXITCODE } }',
     '  $global:__ct.Exit = $global:LASTEXITCODE',
     `  __ct_osc ("${osc};end;" + $code)`,
+    // at each prompt (a tab may attach after the first one): the app types PS_CLEAR_LINE only once told the key is
+    // bound, without PSReadLine it would land on the line
+    `  if ($global:__ct.ClearKey) { __ct_osc ("${osc};clearkey") }`,
     '  $p = (Get-Location -PSProvider FileSystem).ProviderPath',
     '  if ($p -match "^[A-Za-z]:\\\\") { __ct_osc ("7;" + [System.Uri]::new($p).AbsoluteUri) }',
     // the user's prompt (oh-my-posh & co) reads $? for the last status: put the failure back first
@@ -39,6 +42,7 @@ export function powershellIntegration(osc: number): string {
     '    Set-PSReadLineKeyHandler -ViMode Insert -Chord Ctrl+Shift+F12 -Function RevertLine',
     '    Set-PSReadLineKeyHandler -ViMode Command -Chord Ctrl+Shift+F12 -ScriptBlock { [Microsoft.PowerShell.PSConsoleReadLine]::RevertLine(); [Microsoft.PowerShell.PSConsoleReadLine]::ViInsertMode() }',
     '  } else { Set-PSReadLineKeyHandler -Chord Ctrl+Shift+F12 -Function RevertLine }',
+    '  $global:__ct.ClearKey = $true',
     '}',
     // `claude` typed in the tab: adds the project's linked folders (kept in the app's data) when it has some
     'if ($env:CLAUDETERM_LINKS) {',

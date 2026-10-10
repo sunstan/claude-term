@@ -19,6 +19,7 @@ describe('PowerShell integration script', () => {
     expect(s).toContain('"7770;end;"')
     expect(s).toContain('"7;"')
     expect(s).toContain('Ctrl+Shift+F12')
+    expect(s).toContain('7770;clearkey')
     expect(PS_CLEAR_LINE).toBe('\x1b[24;6~')   // Ctrl+Shift+F12 as a terminal sends it
     expect(s).not.toContain('`')   // no PowerShell escapes: [char] codes only
   })
@@ -45,6 +46,7 @@ describe.skipIf(process.platform !== 'win32')('PowerShell integration in a termi
     const until = async (pred: () => boolean) => { for (let i = 0; i < 200 && !pred(); i++) await new Promise((r) => setTimeout(r, 50)) }
     try {
       await until(() => events().includes('7770;end;0'))
+      expect(events()).toContain('7770;clearkey')
       p.write('cmd /c exit 3\r')
       await until(() => events().includes('7770;end;3'))
       p.write('cd C:\\Users\r')
