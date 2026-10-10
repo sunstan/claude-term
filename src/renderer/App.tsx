@@ -84,8 +84,8 @@ export function App() {
   return (
     <div className="wb">
       <div className={'title ' + (mac ? 'mac' : 'win')}>
-        <div className="ptabs">
-        {projects.map((p) => (
+        <div className="ptabs" {...drag.zone}>
+        {drag.arrange(projects, (p) => p.id).map((p) => (
           <div key={p.id} className={'ptab' + (p.id === activeProjectId ? ' on' : '') + drag.dropClass(p.id)} onClick={() => setActiveProject(p.id)} {...drag.props(p.id)}>
             <span style={{ display: 'inline-flex', color: p.id === activeProjectId ? 'var(--ct-accent)' : undefined }}>{Icons.folder(12)}</span>
             <span>{p.root ? p.root.split(/[\\/]/).filter(Boolean).pop() : t('Nouveau projet')}</span>

@@ -66,7 +66,8 @@ function LinksTab({ root, links }: { root: string; links: MemoLink[] }) {
   const [editing, setEditing] = useState<number | null>(null)
   const [menu, setMenu] = useState<{ at: { x: number; y: number }; i: number } | null>(null)
   const drag = useReorder('memo-link', (from, to, place) => save(root, reorder(links, (l) => l.url, from, to, place)), 'y')
-  const shown = links.map((l, i) => ({ l, i })).filter(({ l }) => matchesFilter(l.name + ' ' + l.url, q))
+  // filtered: no reordering (the positions would not be the list's)
+  const shown = q ? links.map((l, i) => ({ l, i })).filter(({ l }) => matchesFilter(l.name + ' ' + l.url, q)) : drag.arrange(links.map((l, i) => ({ l, i })), ({ l }) => l.url)
   const submit = (i: number, link: MemoLink): string | null => {
     if (links.some((x, j) => j !== i && x.url === link.url)) return t('Ce lien est déjà dans le mémo')
     save(root, i < 0 ? [...links, link] : links.map((x, j) => (j === i ? link : x)))
@@ -96,7 +97,7 @@ function LinksTab({ root, links }: { root: string; links: MemoLink[] }) {
       </div>
       {editing === -1 && <LinkForm onSubmit={(l) => submit(-1, l)} onCancel={() => setEditing(null)} />}
       {links.length === 0 && editing !== -1 ? <Empty>{t('Docs, tickets, maquettes, environnements… Ajoute un lien avec +, ou glisse-le depuis le navigateur.')}</Empty> : (
-        <div className="list">
+        <div className="list" {...drag.zone}>
           {shown.map(({ l, i }) => editing === i ? <LinkForm key={l.url} initial={l} onSubmit={(x) => submit(i, x)} onCancel={() => setEditing(null)} /> : (
             <div key={l.url} {...(q ? {} : drag.props(l.url))} className={'lrow memo-row' + drag.dropClass(l.url)} title={l.url}
               onClick={() => window.ct.app.openUrl(l.url)} onContextMenu={(e) => { e.preventDefault(); setMenu({ at: { x: e.clientX, y: e.clientY }, i }) }}>
@@ -158,7 +159,7 @@ function NotesTab({ project, memo }: { project: Project; memo: ProjectMemo }) {
   const savePins = async (next: string[]) => { await window.ct.memo.savePins(root, next); bump() }
   const drag = useReorder('memo-pin', (from, to, place) => savePins(reorder(pins, (p) => p, from, to, place)), 'y')
   const notes = memo.notes.filter((n) => matchesFilter(n.name, q))
-  const pinned = memo.pins.filter((p) => matchesFilter(where(p.path, root), q))
+  const pinned = q ? memo.pins.filter((p) => matchesFilter(where(p.path, root), q)) : drag.arrange(memo.pins, (p) => p.path)
 
   const name = async (value: string) => {
     const r = naming ? await window.ct.memo.renameNote(root, naming, value) : await window.ct.memo.newNote(root, value)
@@ -210,7 +211,7 @@ function NotesTab({ project, memo }: { project: Project; memo: ProjectMemo }) {
       {error && <div className="error" style={{ padding: '2px 10px 6px' }}>{error}</div>}
       {naming === '' && <NameInput placeholder={t('nom de la note')} onSubmit={name} onCancel={() => { setNaming(null); setError(null) }} />}
       {empty ? <Empty>{t('Des notes à toi sur ce projet (gardées dans les données de l\'app, pas dans le dépôt), et les fichiers du projet que tu ouvres souvent : glisse-les ici depuis l\'explorateur.')}</Empty> : (
-        <div className="list">
+        <div className="list" {...drag.zone}>
           {(memo.notes.length > 0 || naming === '') && <div className="memo-group">{t('Notes')}</div>}
           {notes.map((n) => naming === n.path ? <NameInput key={n.path} initial={n.name} onSubmit={name} onCancel={() => { setNaming(null); setError(null) }} /> : (
             <div key={n.path} className="lrow memo-row" title={n.path} onClick={() => openFile(project.id, n.path)} onDoubleClick={() => setNaming(n.path)} onContextMenu={ctx(noteItems(n))}>

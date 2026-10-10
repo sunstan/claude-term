@@ -65,8 +65,8 @@ export function Center({ project }: { project: Project }) {
       ] : []} />
       <VStack id="session" collapsed={sessionCollapsed} initial={240} min={120}
         top={<Island grow title={
-            <div className="tabs">
-              {project.tabs.map((t) => (
+            <div className="tabs" {...drag.zone}>
+              {drag.arrange(project.tabs, (t) => t.id).map((t) => (
                 <div key={t.id} {...(renaming === t.id ? {} : drag.props(t.id))} className={'tab' + (t.id === project.currentTabId ? ' on' : '') + (t.dirty ? ' dirty' : '') + drag.dropClass(t.id)} onClick={() => setCurrentTab(project.id, t.id)} onContextMenu={(e) => { e.preventDefault(); setCtx({ x: e.clientX, y: e.clientY, tab: t }) }} title={t.kind === 'file' ? t.path : t.busy ? t.lastCommand : t.cwd}>
                   <span className={t.working ? 'tab-working' : undefined} style={{ color: t.kind === 'file' ? (t.changedOnDisk ? 'var(--ct-badge-warn)' : 'var(--ct-text-secondary)') : tabColor(t), display: 'inline-flex', position: 'relative' }} title={t.attention ? attentionLabel(t.attention) : t.working ? tr('Claude travaille') : undefined}>
                     {t.kind === 'diff' ? Icons.columns(12) : t.kind === 'file' ? (t.fileKind === 'image' ? Icons.image(12) : Icons.file(12)) : isClaude(t) ? Icons.claude(12) : Icons.terminal(12)}
