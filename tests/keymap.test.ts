@@ -23,6 +23,13 @@ describe('keymap', () => {
     expect(matches('Alt+Shift+ArrowUp', ev('ArrowUp', 'ArrowUp', { altKey: true, shiftKey: true }), true)).toBe(true)
     expect(matches('Bad+X', ev('x', 'KeyX'), true)).toBe(false)
   })
+  it('find in the terminal leaves Ctrl+F to the shell outside macOS, except in the VS Code preset', () => {
+    expect(binding('terminal.find', {}, 'jetbrains', true)).toBe('Mod+F')
+    expect(binding('terminal.find', {}, 'jetbrains', false)).toBe('Mod+Shift+F')
+    expect(binding('terminal.find', {}, 'vscode', false)).toBe('Mod+F')
+    expect(conflicts({}, 'jetbrains', false)).toEqual({})
+    expect(conflicts({}, 'vscode', false)).toEqual({})
+  })
   it('recorder and labels', () => {
     expect(fromEvent(ev('Meta', 'MetaLeft', { metaKey: true }), true)).toBeNull()
     expect(fromEvent(ev('¬', 'KeyL', { metaKey: true, altKey: true }), true)).toBe('Mod+Alt+L')

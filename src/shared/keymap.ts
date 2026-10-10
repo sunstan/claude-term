@@ -5,7 +5,7 @@
 export type KeymapPreset = 'jetbrains' | 'vscode'
 type PerPlatform = string | { mac: string; other: string }
 /** general: anywhere (and over the others); editor: Monaco; terminal: only while a terminal has the focus */
-export interface KeyAction { id: string; scope: 'general' | 'editor' | 'terminal'; label: string; default: string; vscode?: PerPlatform }
+export interface KeyAction { id: string; scope: 'general' | 'editor' | 'terminal'; label: string; default: PerPlatform; vscode?: PerPlatform }
 
 export const ACTIONS: KeyAction[] = [
   // general
@@ -31,7 +31,8 @@ export const ACTIONS: KeyAction[] = [
   { id: 'app.git', scope: 'general', label: 'Git', default: 'Mod+9', vscode: 'Ctrl+Shift+G' },
   { id: 'app.commit', scope: 'general', label: 'Commit', default: 'Mod+K', vscode: '' },
   // terminal (while it has the focus; its own keys, so not limited to what terminals leave to the app)
-  { id: 'terminal.find', scope: 'terminal', label: 'Rechercher dans le terminal', default: 'Mod+F' },
+  // Ctrl+F alone stays the shell's (readline forward-char) outside macOS; VS Code takes it in its terminal, so does its preset
+  { id: 'terminal.find', scope: 'terminal', label: 'Rechercher dans le terminal', default: { mac: 'Mod+F', other: 'Mod+Shift+F' }, vscode: 'Mod+F' },
   // editor (Monaco commands)
   { id: 'editor.action.formatDocument', scope: 'editor', label: 'Reformater le code', default: 'Mod+Alt+L', vscode: 'Alt+Shift+F' },
   { id: 'editor.action.commentLine', scope: 'editor', label: 'Commenter la ligne', default: 'Mod+/' },
@@ -112,8 +113,7 @@ export function label(s: string, mac: boolean): string {
 
 /** The preset's shortcut for an action, before the user's overrides. */
 export function defaultBinding(a: KeyAction, preset: KeymapPreset = 'jetbrains', mac = false): string {
-  const v = preset === 'vscode' ? a.vscode : undefined
-  if (v === undefined) return a.default
+  const v = (preset === 'vscode' ? a.vscode : undefined) ?? a.default
   return typeof v === 'string' ? v : mac ? v.mac : v.other
 }
 

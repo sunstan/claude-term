@@ -33,9 +33,11 @@ function PaletteModal({ initial }: { initial: string }) {
   const [files, setFiles] = useState<string[]>([])
   const [sessions, setSessions] = useState<SessionInfo[] | null>(null)
   const [skills, setSkills] = useState<SkillInfo[] | null>(null)
-  const st = useWorkbench()
-  const project = st.projects.find((p) => p.id === st.activeProjectId)
-  const root = project?.root ?? null
+  // only what the list shows: the palette stays still while terminals and sessions update the store
+  const settings = useWorkbench((s) => s.settings)
+  const projectId = useWorkbench((s) => s.activeProjectId)
+  const root = useWorkbench((s) => s.projects.find((p) => p.id === s.activeProjectId)?.root ?? null)
+  const st = useWorkbench.getState()
   const mac = window.ct.platform === 'darwin'
   const { mode, query } = paletteInput(text)
   const input = useRef<HTMLInputElement>(null)
@@ -57,12 +59,12 @@ function PaletteModal({ initial }: { initial: string }) {
   const run = (f: () => void) => { close(); f() }
   const items: Item[] = useMemo(() => {
     if (mode === 'commands') {
-      const kb = st.settings?.keybindings ?? {}, preset = st.settings?.keymapPreset
+      const kb = settings?.keybindings ?? {}, preset = settings?.keymapPreset
       const actions: Item[] = ACTIONS.filter((a) => a.scope === 'general').map((a) => {
         const k = binding(a.id, kb, preset, mac)
         return { key: a.id, icon: Icons.play(13), label: t(a.label), hint: k ? keyLabel(k, mac) : undefined, run: () => runAppAction(a.id) }
       })
-      const right: Item[] = RIGHT.map((r) => ({ key: 'right:' + r.id, icon: Icons.columns(13), label: t(r.title), run: () => st.setRight(st.rightActivity === r.id ? null : r.id) }))
+      const right: Item[] = RIGHT.map((r) => ({ key: 'right:' + r.id, icon: Icons.columns(13), label: t(r.title), run: () => st.setRight(useWorkbench.getState().rightActivity === r.id ? null : r.id) }))
       const plug = usePlugins.getState()
       const plugins: Item[] = [...plug.activities('left').map((a) => ({ a, side: 'left' as const })), ...plug.activities('right').map((a) => ({ a, side: 'right' as const }))]
         .map(({ a, side }) => ({ key: 'plugin:' + a.id, icon: Icons.puzzle(13), label: a.title, detail: t('panneau'), run: () => (side === 'left' ? st.setLeft(a.id) : st.setRight(a.id)) }))
@@ -72,20 +74,20 @@ function PaletteModal({ initial }: { initial: string }) {
       return rank(sessions ?? [], (s) => `${s.title} ${s.projectPath.split(/[\\/]/).pop()}`, query, 60).map((s) => ({
         key: s.path, icon: Icons.claude(13), label: s.title || t('(sans titre)'),
         detail: [s.projectPath.split(/[\\/]/).filter(Boolean).pop(), s.gitBranch, new Date(s.modified).toLocaleDateString()].filter(Boolean).join(' · '),
-        run: () => { if (project) st.newTab(project.id, 'claude', s.projectPath || undefined, s.id) },
+        run: () => { if (projectId) st.newTab(projectId, 'claude', s.projectPath || undefined, s.id) },
       }))
     }
     if (mode === 'skills') {
       return rank(skills ?? [], (s) => `${s.name} ${s.description}`, query).map((s) => ({
         key: s.path, icon: Icons.sparkle(13), label: '/' + s.name, detail: s.description,
-        run: () => { if (project) st.insertPrompt(project.id, '/' + s.name + ' ') },
+        run: () => { if (projectId) st.insertPrompt(projectId, '/' + s.name + ' ') },
       }))
     }
     return files.map((r) => ({
       key: r, icon: <FileIcon path={r} size={14} />, label: r.split('/').pop() ?? r, detail: r.includes('/') ? r.slice(0, r.lastIndexOf('/')) : undefined,
-      run: () => { if (project && root) st.openFile(project.id, joinPath(root, r.split('/'))) },
+      run: () => { if (projectId && root) st.openFile(projectId, joinPath(root, r.split('/'))) },
     }))
-  }, [mode, query, files, sessions, skills, st.settings, st.rightActivity, project?.id, root])
+  }, [mode, query, files, sessions, skills, settings, projectId, root])
 
   const pick = (i: number) => { const it = items[i]; if (it) run(it.run) }
   return (
