@@ -37,6 +37,18 @@ describe('transcript parsing', () => {
     expect(u.planMode).toBe(true); expect(u.planPath).toBe('/Users/j/.claude/plans/x.md')
     expect(u.aiTitle).toBe('Un titre')
   })
+  it('reads the permission mode from the prompts too (a session started by /clear has no permission-mode record)', () => {
+    const u = parseTranscript(jsonl([
+      { type: 'system', subtype: 'local_command', content: '/clear' },
+      { type: 'user', permissionMode: 'auto', timestamp: 't1', message: { role: 'user', content: 'salut' } },
+    ]), opts)
+    expect(u.permissionMode).toBe('auto')
+    // a switch after the prompt (shift+tab) wins
+    expect(parseTranscript(jsonl([
+      { type: 'user', permissionMode: 'auto', timestamp: 't1', message: { role: 'user', content: 'salut' } },
+      { type: 'permission-mode', permissionMode: 'plan' },
+    ]), opts).permissionMode).toBe('plan')
+  })
   it('keeps the model and the context of the last main-thread message', () => {
     const u = parseTranscript(jsonl([
       { type: 'assistant', message: { model: 'claude-opus-5-5', usage: { input_tokens: 10, cache_read_input_tokens: 50_000, cache_creation_input_tokens: 2_000, output_tokens: 5 }, content: [] } },

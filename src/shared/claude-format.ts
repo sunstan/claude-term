@@ -149,6 +149,8 @@ export function parseTranscript(lines: string[], opts: { plansDir: string; home:
         break
       }
       case 'user': {
+        // prompts carry the mode they were sent in; a session started by /clear has no permission-mode record
+        if (typeof obj.permissionMode === 'string') u.permissionMode = obj.permissionMode
         const msg = obj.message
         if (!msg) break
         const bed = obj.toolUseResult?.bashEditDiff
