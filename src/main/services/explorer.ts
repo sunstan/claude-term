@@ -1,6 +1,6 @@
 import { spawn } from 'node:child_process'
-import { readdirSync, statSync } from 'node:fs'
-import { join } from 'node:path'
+import { existsSync, readdirSync, statSync } from 'node:fs'
+import { dirname, join } from 'node:path'
 import type { DirEntry } from '@shared/ipc'
 
 const NUL = '\0'
@@ -25,6 +25,31 @@ export function ignoredNames(dir: string, names: string[], env?: NodeJS.ProcessE
   })
 }
 
+/** Whether `dir` is in a git repository (a .git above it); a yes is remembered, a no is checked again (a later git init). */
+const inRepo = new Set<string>()
+export function inRepository(dir: string): boolean {
+  if (inRepo.has(dir)) return true
+  const up = dirname(dir)
+  const v = existsSync(join(dir, '.git')) || (up !== dir && inRepository(up))
+  if (v) inRepo.add(dir)
+  return v
+}
+
+/**
+ * What git ignores in a folder, reused for a few seconds when its names did not change: a build or Claude's edits
+ * reload the tree many times in a row, each reload would start git again.
+ */
+const ignoredCache = new Map<string, { names: string; at: number; set: Promise<Set<string>> }>()
+function ignoredCached(dir: string, names: string[], env?: NodeJS.ProcessEnv): Promise<Set<string>> {
+  if (!inRepository(dir)) return Promise.resolve(new Set())
+  const key = names.join(NUL), hit = ignoredCache.get(dir)
+  if (hit && hit.names === key && Date.now() - hit.at < 5000) return hit.set
+  const set = ignoredNames(dir, names, env)
+  ignoredCache.set(dir, { names: key, at: Date.now(), set })
+  if (ignoredCache.size > 500) ignoredCache.delete(ignoredCache.keys().next().value!)
+  return set
+}
+
 /**
  * A folder's entries, folders first, then by name. With `marks`: what git ignores, and the folders Claude Code has
  * sessions for (`hasSessions`).
@@ -43,7 +68,7 @@ export async function listDir(path: string, o: { marks?: boolean; env?: NodeJS.P
   if (!o.marks) return entries
   // .git is git's own folder, never reported by check-ignore; folders go with a trailing slash so that "dir/"
   // patterns match them
-  const ignored = await ignoredNames(path, entries.filter((e) => e.name !== '.git').map((e) => e.isDir ? e.name + '/' : e.name), o.env)
+  const ignored = await ignoredCached(path, entries.filter((e) => e.name !== '.git').map((e) => e.isDir ? e.name + '/' : e.name), o.env)
   return entries.map((e) => ({
     ...e,
     ...(ignored.has(e.name) || ignored.has(e.name + '/') ? { ignored: true } : {}),
