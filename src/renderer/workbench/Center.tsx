@@ -3,6 +3,7 @@ import { TermBubble, attentionColor, attentionLabel } from './TermBubble'
 import { useReorder } from './useReorder'
 import { TerminalHost } from '@/terminal/TerminalView'
 import { useEffect, useState } from 'react'
+import { MODEL_CHOICES } from '@shared/models'
 import { useWorkbench, isClaude, type Project, type Tab } from '@/stores/workbench'
 import { VStack, useCollapsed } from './Split'
 import { SessionBlock } from './SessionBlock'
@@ -90,6 +91,9 @@ export function Center({ project }: { project: Project }) {
             <MenuButton title={tr('Nouvel onglet')} items={[
               { label: tr('Claude'), icon: Icons.claude(13), shortcut: shortcutLabel('app.newClaude'), onSelect: () => newTab(project.id, 'claude') },
               { label: tr('Shell'), icon: Icons.terminal(13), shortcut: shortcutLabel('app.newShell'), onSelect: () => newTab(project.id, 'shell') },
+              'sep' as const,
+              // a Claude tab on another model than the default, for its sessions only (claude --model)
+              ...MODEL_CHOICES.map((c) => ({ label: tr('Claude avec {model}', { model: c.label }), icon: Icons.claude(13), onSelect: () => newTab(project.id, 'claude', undefined, undefined, { model: c.alias }) })),
               ...(window.ct.platform !== 'linux' ? ['sep' as const, { label: tr("Capture d'écran → prompt"), icon: Icons.camera(13), shortcut: shortcutLabel('app.screenshot'), onSelect: () => useWorkbench.getState().captureScreen(project.id) }] : []),
             ]}>{Icons.plus()}</MenuButton>
           </>}>

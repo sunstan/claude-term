@@ -98,7 +98,8 @@ interface Workbench {
   moveProject(from: string, to: string, place: 'before' | 'after'): void
   moveTab(projectId: string, from: string, to: string, place: 'before' | 'after'): void
   select(projectId: string, path: string, isDir: boolean): void
-  newTab(projectId: string, kind: TabKind, cwd?: string, resume?: string): Promise<void>
+  /** `model`: a Claude tab opened on that /model alias */
+  newTab(projectId: string, kind: TabKind, cwd?: string, resume?: string, o?: { model?: string }): Promise<void>
   /** starts a tab reopened from the last launch (its shell, `claude --resume`, or its file) */
   wake(tabId: string): Promise<void>
   /** types text into the current Claude tab of the project (opens one if needed) */
@@ -258,12 +259,12 @@ export const useWorkbench = create<Workbench>((set, get) => ({
     set((s) => ({ projects: s.projects.map((p) => (p.id === projectId ? { ...p, selectedPath: path, selectedFolder: folder } : p)) }))
   },
 
-  async newTab(projectId, kind, cwd, resume) {
+  async newTab(projectId, kind, cwd, resume, o) {
     const p = get().projects.find((x) => x.id === projectId)
     if (!p) return
     const dir = cwd ?? p.selectedFolder
     const id = 't' + ++seq
-    const { id: ptyId, error } = await window.ct.pty.create({ cwd: dir, kind, projectRoot: p.root ?? undefined, resume, tabId: id })
+    const { id: ptyId, error } = await window.ct.pty.create({ cwd: dir, kind, projectRoot: p.root ?? undefined, resume, tabId: id, ...(o?.model ? { model: o.model } : {}) })
     const tab: Tab = { id, kind, title: name(dir), cwd: dir, ptyId, alive: !error, busy: false, lastCommand: '', lastExit: null, claudeRunning: false }
     if (error) tab.title += ' (erreur)'
     // a resumed session reopens under the name of the tab it ran in

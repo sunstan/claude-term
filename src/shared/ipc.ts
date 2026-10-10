@@ -36,6 +36,8 @@ export interface PtyCreate {
   kind: TabKind
   /** `claude --resume <id>` */
   resume?: string
+  /** `claude --model <alias>` (a /model alias: "opus", "sonnet[1m]"…) */
+  model?: string
   /** exported as CLAUDETERM_ROOT for the shell's `claude` wrapper */
   projectRoot?: string
   /** the renderer's tab, exported (with this run's instance) as CLAUDETERM_TAB: hook events name the tab they come from */

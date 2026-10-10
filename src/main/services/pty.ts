@@ -62,11 +62,13 @@ export class PtyService {
     let file: string, args: string[], verbatim = false
     const settings = this.getSettings()
     if (opts.kind === 'claude') {
+      // a session to resume, a model for this tab only (an alias: "opus", "sonnet[1m]"…)
+      const launch = [...(opts.resume ? ['--resume', opts.resume] : []), ...(opts.model && /^[a-z0-9.[\]-]+$/i.test(opts.model) ? ['--model', opts.model] : [])]
       if (process.platform === 'win32' && settings.windowsMode === 'wsl') {
         file = 'wsl.exe'
-        args = [...(settings.wslDistro ? ['-d', settings.wslDistro] : []), '--cd', opts.cwd, '--', 'claude', ...(opts.resume ? ['--resume', opts.resume] : [])]
+        args = [...(settings.wslDistro ? ['-d', settings.wslDistro] : []), '--cd', opts.cwd, '--', 'claude', ...launch]
       } else {
-        const inv = this.claudeCommand([...(this.links?.claudeArgs(opts.projectRoot) ?? []), ...(opts.resume ? ['--resume', opts.resume] : [])], true)
+        const inv = this.claudeCommand([...(this.links?.claudeArgs(opts.projectRoot) ?? []), ...launch], true)
         if (!inv) return { id, error: 'claude introuvable dans le PATH (installe Claude Code : npm i -g @anthropic-ai/claude-code)' }
         file = inv.file
         args = inv.args
