@@ -21,7 +21,8 @@ const worktrees = (r: string) => parseWorktrees(git(r, 'worktree', 'list', '--po
 /** A repo with a remote (bare) and one commit on main. */
 function repo() {
   const t = new TempDir(); const r = join(t.path, 'work'); const bare = join(t.path, 'origin.git')
-  execFileSync('git', ['init', '-q', '--bare', bare])
+  // main for the bare one too: a clone checks out its HEAD, which is master where git's default is not set (CI)
+  execFileSync('git', ['init', '-q', '--bare', '-b', 'main', bare])
   execFileSync('git', ['init', '-q', '-b', 'main', r])
   t.write('work/a.txt', 'a\n'); git(r, 'add', '.'); git(r, 'commit', '-q', '-m', 'first')
   git(r, 'remote', 'add', 'origin', bare); git(r, 'push', '-q', '-u', 'origin', 'main')
@@ -123,7 +124,7 @@ describe('git plugin parsers: worktrees, stashes, PR / MR, pull, chip', { timeou
   it('pull --ff-only against a real remote: pulled, up to date, diverged', () => {
     const { t, r } = repo()
     const other = join(t.path, 'other')
-    execFileSync('git', ['clone', '-q', join(t.path, 'origin.git'), other], { stdio: 'ignore' })
+    execFileSync('git', ['clone', '-q', '-b', 'main', join(t.path, 'origin.git'), other], { stdio: 'ignore', env: env(t.path) })
     t.write('other/b.txt', 'b\n'); git(other, 'add', '.'); git(other, 'commit', '-q', '-m', 'b'); git(other, 'push', '-q')
     const pull = (dir: string) => {
       const before = git(dir, 'rev-parse', 'HEAD').trim()
