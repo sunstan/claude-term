@@ -74,7 +74,8 @@ exports.activate = (ctx) => {
         byRepo.get(top).push(f)
       }
       for (const [repo, fs] of byRepo) {
-        const st = await ctx.process.exec('git', ['--no-optional-locks', 'status', '--porcelain=v2', '--branch', '-z', '--untracked-files=all'], { cwd: repo })
+        // the chip only says whether something changed: untracked folders are not walked (every 15 s, on every repository)
+        const st = await ctx.process.exec('git', ['--no-optional-locks', 'status', '--porcelain=v2', '--branch', '-z', '--untracked-files=normal'], { cwd: repo })
         const chip = st.code === 0 ? branchChip(parseStatus(st.stdout)) : null
         for (const f of fs) ctx.ui.projectDecoration(f, chip)
       }
