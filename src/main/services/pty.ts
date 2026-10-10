@@ -3,7 +3,7 @@ import { execFileSync } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { OSC_SHELL, type PtyCreate, type Settings } from '@shared/ipc'
 import { powershellArgs } from '@shared/powershell'
-import { RUN_ID } from './hooks'
+import { RUN_ID } from './run-id'
 import { ShellIntegration } from './shell-integration'
 import { claudeInvocation, findClaude, type Invocation } from './claude-bin'
 

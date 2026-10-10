@@ -1,13 +1,10 @@
 import { app, Notification, BrowserWindow } from 'electron'
 import { watch, type FSWatcher, mkdirSync, readdirSync, readFileSync, writeFileSync, existsSync, chmodSync, unlinkSync, statSync } from 'node:fs'
 import { join } from 'node:path'
-import { randomBytes } from 'node:crypto'
 import type { Attention } from '@shared/ipc'
 import { ClaudeSettings } from './claude-settings'
 import type { SessionTracker } from './session-tracker'
-
-/** This run of the app: CLAUDETERM_TAB is `<run>.<tab>`, so events left by an earlier run never reach a tab of this one. */
-export const RUN_ID = randomBytes(4).toString('hex')
+import { RUN_ID } from './run-id'
 
 /**
  * Claude Code hooks (Notification, Stop, SessionStart) spool JSON events into `userData/events` through a small
