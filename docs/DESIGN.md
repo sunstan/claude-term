@@ -174,8 +174,10 @@ and **Linear** (API key in secrets, GraphQL, "Mes issues", "Démarrer avec Claud
 - Plans: `~/.claude/plans`. Sessions index: `sessions-index.json` (deletion allowed).
 - Hooks `Notification` and `Stop` installed only from settings, spooling events into
   `userData/events`; routed to tabs (attention badge, macOS/Windows notifications).
-- Shell integration: OSC 7770 from a private zsh rc (busy state, last command, exit code);
-  PowerShell profile equivalent on Windows.
+- Shell integration: OSC 7770 from a private zsh / bash rc (busy state, last command, exit code, OSC 7 cwd);
+  on Windows a PowerShell script run after the user's profile (`-EncodedCommand`, `shared/powershell.ts`), and in WSL
+  mode the same zsh / bash rc files reached through `WSLENV`. Linked folders are not passed to `claude` in WSL mode
+  (their files carry Windows paths).
 - Writes are limited to: `~/.claude/settings.json` (form; hooks; our `statusLine` on demand, never over a foreign
   one), `sessions-index.json`,
   `<project>/.mcp.json` (project MCP, meant to be shared). Linked folders are machine-specific, so they live in the

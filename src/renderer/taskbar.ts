@@ -5,11 +5,14 @@ import { t } from '@/i18n'
 export function watchTaskbarBadge() {
   if (window.ct.platform !== 'win32') return
   let last = -1
+  let lastTheme: unknown = null
   useWorkbench.subscribe((s) => {
     const n = s.settings?.dockBadge === false ? 0 : s.projects.reduce((k, p) => k + p.tabs.filter((x) => x.attention).length, 0)
-    if (n === last) return
+    if (n === last && (!n || s.theme === lastTheme)) return
     last = n
-    window.ct.app.setOverlay(n ? draw(n > 9 ? '9+' : String(n)) : null, n ? t('{n} onglet(s) en attente', { n }) : '')
+    lastTheme = s.theme
+    // a new theme's tokens reach the document in App's effect, after the store changes: draw once they are applied
+    setTimeout(() => window.ct.app.setOverlay(n ? draw(n > 9 ? '9+' : String(n)) : null, n ? t('{n} onglet(s) en attente', { n }) : ''), 100)
   })
 }
 

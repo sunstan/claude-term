@@ -40,7 +40,7 @@ export function ProcessIsland() {
                 <div className="lrow" onClick={() => setOpen(open === p.pid ? null : p.pid)}>
                   <span className="ico">{Icons.claude(12)}</span>
                   <div className="lbody">
-                    <div className="head"><span className="name">{name}</span><span className="badge dim">PID {p.pid}</span><span className="badge dim">{tab ? t('cet onglet') : t('lancé ailleurs')}</span></div>
+                    <div className="head"><span className="name">{name}</span><span className="badge dim">PID {p.pid}</span><span className="badge dim">{tab ? t('dans un onglet') : t('lancé ailleurs')}</span></div>
                     <div className="desc" title={p.command}>{[where, p.elapsed, p.cpu ? `${p.cpu}%` : '', `${p.memMB} Mo`, p.children.length ? `${p.children.length} ${t('sous-process')}` : ''].filter(Boolean).join(' · ')}</div>
                     {args && <div className="desc" title={p.command} style={{ fontFamily: 'var(--ct-font-mono)', fontSize: 10.5 }}>{args}</div>}
                   </div>
