@@ -171,6 +171,9 @@ and **Linear** (API key in secrets, GraphQL, "Mes issues", "Démarrer avec Claud
 ## 8. Claude Code integration (ported from v1)
 
 - Claude tab = pty running `claude` (or `claude --resume <id>`) in the project cwd.
+- Tabs reopen at the next launch (`userData/workspace.json`, `services/workspace.ts`, `shared/workspace.ts`): Claude tabs
+  with `--resume` of their session, shells in their folder with their last 1000 lines replayed greyed (`userData/scrollback`)
+  and the command running at quit typed again (not run), files; diffs are not kept. They start when first shown.
 - Transcript: `~/.claude/projects/<encoded cwd>/<session>.jsonl` tailed for messages, tool
   calls, files touched, tokens, plan mode, permission mode; encoding of the cwd is ASCII-only
   (`[^a-zA-Z0-9]` → `-`). Claimed transcripts: the one the `SessionStart` hook names for the tab, else the newest

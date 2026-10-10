@@ -5,6 +5,7 @@ import { reorder } from '@shared/order'
 import { clearLine, commandLine, dialectFor } from '@shared/shell'
 import { t } from '@/i18n'
 import { pathShell, pathsForPrompt, windowsPathFromWsl, wslPath } from '@shared/paths'
+import { savedTab, type SavedTab, type SavedWorkspace } from '@shared/workspace'
 import type { ResolvedTheme } from '@shared/theme'
 import type { Settings, TabKind, SessionState, Attention } from '@shared/ipc'
 
@@ -34,6 +35,12 @@ export interface Tab {
   working?: boolean
   /** a name the user gave the tab: shown instead of `title`, which keeps following the folder */
   customTitle?: string
+  /** reopened from the last launch and not shown yet: its process (or file) starts once it is (wake) */
+  dormant?: { session?: string; scrollback?: string; input?: string }
+  /** shells: the last lines of the previous launch, written once above the new prompt */
+  replay?: string
+  /** shells: the command running at the previous quit, typed at the first prompt (not run) */
+  pendingInput?: string
   // file tabs
   fileKind?: 'text' | 'image' | 'other'
   dirty?: boolean
@@ -90,6 +97,8 @@ interface Workbench {
   moveTab(projectId: string, from: string, to: string, place: 'before' | 'after'): void
   select(projectId: string, path: string, isDir: boolean): void
   newTab(projectId: string, kind: TabKind, cwd?: string, resume?: string): Promise<void>
+  /** starts a tab reopened from the last launch (its shell, `claude --resume`, or its file) */
+  wake(tabId: string): Promise<void>
   /** types text into the current Claude tab of the project (opens one if needed) */
   insertPrompt(projectId: string, text: string): Promise<void>
   /** types escaped file paths into a terminal tab (the current one, else the Claude tab) */
@@ -148,15 +157,20 @@ export const useWorkbench = create<Workbench>((set, get) => ({
   layout: {},
 
   async init() {
-    const [theme, settings] = await Promise.all([window.ct.themes.current(), window.ct.settings.get()])
+    const [theme, settings, saved] = await Promise.all([window.ct.themes.current(), window.ct.settings.get(), window.ct.workspace.load()])
     const projects: Project[] = []
     for (const root of settings.openProjects) {
-      if (await window.ct.fs.exists(root)) projects.push({ id: nid(), root, tabs: [], currentTabId: null, selectedPath: null, selectedFolder: root })
+      if (!(await window.ct.fs.exists(root))) continue
+      // the tabs of the last launch, dormant until shown
+      const was = saved.projects.find((x) => x.root === root)
+      const tabs = (was?.tabs ?? []).map(restoredTab)
+      projects.push({ id: nid(), root, tabs, currentTabId: tabs[Math.min(was?.current ?? 0, tabs.length - 1)]?.id ?? null, selectedPath: null, selectedFolder: root })
     }
     if (projects.length === 0) projects.push({ id: nid(), root: null, tabs: [], currentTabId: null, selectedPath: null, selectedFolder: window.ct.home })
+    const active = projects.find((p) => p.root === saved.active) ?? projects[0]
     // the Lanceur plugin became the Exécuter panel (2026-09-28)
     const left = settings.leftActivity === 'claudeterm.runnables:run' ? 'run' : settings.leftActivity
-    set({ theme, settings, projects, activeProjectId: projects[0].id, leftActivity: left as LeftActivity | null, rightActivity: settings.rightActivity as RightActivity | null, layout: settings.layout ?? {} })
+    set({ theme, settings, projects, activeProjectId: active.id, leftActivity: left as LeftActivity | null, rightActivity: settings.rightActivity as RightActivity | null, layout: settings.layout ?? {} })
     window.ct.themes.onChange((theme) => set({ theme }))
     window.ct.settings.onChange((settings) => set({ settings }))
     window.ct.claude.onUpdate(({ tabId, state, newEvents }) => {
@@ -169,6 +183,7 @@ export const useWorkbench = create<Workbench>((set, get) => ({
       const p = get().projects.find((x) => x.tabs.some((t) => t.id === tabId))
       if (p) { set({ activeProjectId: p.id }); get().setCurrentTab(p.id, tabId) }
     })
+    watchWorkspace(get)
     window.addEventListener('focus', () => get().visibleChanged())
     window.addEventListener('blur', () => get().autoSaveAll())
     window.ct.fs.onChanged((path) => {
@@ -239,6 +254,30 @@ export const useWorkbench = create<Workbench>((set, get) => ({
     else if (kind === 'claude') window.ct.claude.track(tab.id, dir, resume ? { resume } : undefined)
     get().visibleChanged()
   },
+  async wake(tabId) {
+    const p = get().projects.find((x) => x.tabs.some((y) => y.id === tabId))
+    const tab = p?.tabs.find((x) => x.id === tabId)
+    if (!p || !tab?.dormant || waking.has(tabId)) return
+    waking.add(tabId)
+    const d = tab.dormant
+    try {
+      if (tab.kind === 'file' && tab.path) {
+        const r = await window.ct.fs.readFile(tab.path)
+        if (r.kind === 'text' && r.text !== undefined) (await import('@/editor/EditorHost')).setFileText(tab.path, r.text)
+        if (r.kind !== 'other') window.ct.fs.watch(tab.path)
+        patchTab(set, tabId, () => ({ dormant: undefined, fileKind: r.kind === 'other' ? 'other' : r.kind, imageUrl: r.dataUrl, error: r.error ?? (r.kind === 'other' ? t('Fichier introuvable ou illisible') : undefined) }))
+        return
+      }
+      // the folder may be gone: the project's then
+      const cwd = (await window.ct.fs.exists(tab.cwd)) ? tab.cwd : p.root ?? window.ct.home
+      const replay = d.scrollback ? await window.ct.workspace.scrollback(d.scrollback) : ''
+      const kind = tab.kind as TabKind
+      const { id: ptyId, error } = await window.ct.pty.create({ cwd, kind, projectRoot: p.root ?? undefined, resume: d.session, tabId })
+      patchTab(set, tabId, () => ({ dormant: undefined, ptyId, cwd, alive: !error, replay: replay || undefined, pendingInput: d.input, ...(error ? { title: tab.title + ' (erreur)' } : {}) }))
+      if (error) console.error(error)
+      else if (kind === 'claude') window.ct.claude.track(tabId, cwd, d.session ? { resume: d.session } : undefined)
+    } finally { waking.delete(tabId) }
+  },
   async sendPaths(projectId, paths, tabId) {
     if (!paths.length) return
     const p = get().projects.find((x) => x.id === projectId)
@@ -252,7 +291,7 @@ export const useWorkbench = create<Workbench>((set, get) => ({
     const p = get().projects.find((x) => x.id === projectId)
     if (!p) return
     // a tab waiting for a plugin's command to start is not free either (two ▶ in a row)
-    const free = (x: Tab) => x.kind === 'shell' && x.alive && !x.busy && !x.claudeRunning && !x.run
+    const free = (x: Tab) => x.kind === 'shell' && x.alive && !x.dormant && !x.busy && !x.claudeRunning && !x.run
     let target = tab === 'reuse' ? (p.tabs.find((x) => x.id === p.currentTabId && free(x)) ?? p.tabs.find(free)) : undefined
     if (!target) {
       await get().newTab(projectId, 'shell', cwd)
@@ -278,6 +317,8 @@ export const useWorkbench = create<Workbench>((set, get) => ({
     const p = get().projects.find((x) => x.id === projectId)
     if (!p) return
     let t = p.tabs.find((x) => x.id === p.currentTabId && isClaude(x) && x.alive) ?? p.tabs.find((x) => isClaude(x) && x.alive)
+    // a Claude tab reopened from the last launch starts first
+    if (t?.dormant) { const id = t.id; await get().wake(id); await new Promise((r) => setTimeout(r, 2500)); t = get().projects.find((x) => x.id === projectId)?.tabs.find((x) => x.id === id) }
     if (!t) { await get().newTab(projectId, 'claude'); await new Promise((r) => setTimeout(r, 1500)); t = get().projects.find((x) => x.id === projectId)?.tabs.at(-1) }
     if (!t?.ptyId) return
     get().setCurrentTab(projectId, t.id)
@@ -362,12 +403,15 @@ export const useWorkbench = create<Workbench>((set, get) => ({
       }
       if (kind === 'clearkey') return t.clearKey ? {} : { clearKey: true }
       if (kind === 'end') {
+        // the command running at the last quit: typed at the first prompt, for the user to run again
+        const typed = !!t.pendingInput && !!t.ptyId
+        if (typed) window.ct.pty.write(t.ptyId!, t.pendingInput!)
         if (t.claudeRunning) window.ct.claude.untrack(t.id)
         window.ct.plugins.commandEnd({ command: t.lastCommand, exit: rest === '' ? null : +rest })
         // a plugin's command is over once it has run; one that never started (cancelled with ^C, a shell that does not
         // report it) goes at the next prompt too, except the prompt a new tab prints right after it opened
         const over = t.run && (t.run.started || Date.now() - t.run.at > 1500)
-        return { busy: false, lastExit: rest === '' ? null : +rest, claudeRunning: false, working: false, title: name(t.cwd), ...(over ? { run: undefined } : {}) }
+        return { busy: false, lastExit: rest === '' ? null : +rest, claudeRunning: false, working: false, title: name(t.cwd), ...(over ? { run: undefined } : {}), ...(typed ? { pendingInput: undefined } : {}) }
       }
       return {}
     })
@@ -458,6 +502,60 @@ export const useWorkbench = create<Workbench>((set, get) => ({
 
 /** How the terminal tabs read paths (Windows: native PowerShell / claude.exe, or WSL shells). */
 export function tabPathShell() { return pathShell(window.ct.platform, useWorkbench.getState().settings?.windowsMode) }
+
+const waking = new Set<string>()
+
+/** A tab of the last launch, as it reappears: its title and name, its process (or file) not started yet. */
+function restoredTab(x: SavedTab): Tab {
+  const tab: Tab = { id: 't' + ++seq, kind: x.kind, title: x.title, cwd: x.cwd, alive: true, busy: false, lastCommand: '', lastExit: null, claudeRunning: false, customTitle: x.customTitle,
+    dormant: { session: x.session, scrollback: x.scrollback, input: x.input } }
+  if (x.kind === 'file') { tab.path = x.path; tab.dirty = false }
+  return tab
+}
+
+/** A shell's last lines (TerminalView provides it: the terminals live outside the store). */
+let terminalText: (tabId: string) => string | null = () => null
+export function provideTerminalText(fn: (tabId: string) => string | null) { terminalText = fn }
+
+/** This launch's key for each shell's saved lines (a new one each launch: the files of the last stay until replaced). */
+const RUN = Math.random().toString(36).slice(2, 8)
+
+function savedWorkspace(s: Workbench, scrollbacks?: Record<string, string>, lines?: (tabId: string) => string | null): SavedWorkspace {
+  const projects = s.projects.filter((p) => p.root).map((p) => {
+    const tabs: SavedTab[] = []
+    let current = 0
+    for (const t of p.tabs) {
+      let key: string | undefined
+      if (scrollbacks && lines && t.kind === 'shell' && !t.dormant) {
+        const text = lines(t.id)
+        if (text) { key = RUN + '-' + t.id; scrollbacks[key] = text }
+      }
+      const x = savedTab(t, key)
+      if (!x) continue
+      if (t.id === p.currentTabId) current = tabs.length
+      tabs.push(x)
+    }
+    return { root: p.root!, tabs, current }
+  })
+  return { projects, active: s.projects.find((p) => p.id === s.activeProjectId)?.root ?? null }
+}
+
+/** Saves the tabs as they change (debounced), and with the shells' last lines when the window goes. */
+function watchWorkspace(get: () => Workbench) {
+  let last = '', timer: ReturnType<typeof setTimeout> | undefined
+  useWorkbench.subscribe((s) => {
+    const json = JSON.stringify(savedWorkspace(s))
+    if (json === last) return
+    last = json
+    clearTimeout(timer)
+    timer = setTimeout(() => window.ct.workspace.save(JSON.parse(json)), 800)
+  })
+  window.addEventListener('beforeunload', () => {
+    clearTimeout(timer)
+    const scrollbacks: Record<string, string> = {}
+    window.ct.workspace.saveNow(savedWorkspace(get(), scrollbacks, terminalText), scrollbacks)
+  })
+}
 
 function projectOf(s: Workbench, tabId: string): string {
   return s.projects.find((p) => p.tabs.some((t) => t.id === tabId))?.id ?? ''

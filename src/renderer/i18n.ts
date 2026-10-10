@@ -462,4 +462,9 @@ const EN: Record<string, string> = {
   'Aucun lien': 'No link',
   'Aucune note dans les mémos des projets': 'No note in the projects’ memos',
   'Aucune note': 'No note',
+  'session restaurée': 'session restored',
+  'Ouverture…': 'Opening…',
+  'Reprise de la session…': 'Resuming the session…',
+  'Démarrage…': 'Starting…',
+  'Fichier introuvable ou illisible': 'File not found or unreadable',
 }

@@ -7,13 +7,24 @@ import type { ResolvedTheme } from '@shared/theme'
 import { OSC_SHELL } from '@shared/ipc'
 import * as pathsMod from '@shared/paths'
 const require_paths = () => pathsMod
-import { useWorkbench, tabPathShell, type Tab } from '@/stores/workbench'
+import { useWorkbench, tabPathShell, provideTerminalText, type Tab } from '@/stores/workbench'
+import { lastLines } from '@shared/workspace'
 import { binding, findAction, matches } from '@shared/keymap'
 import { TermFindBar, useTermFind } from './TermFind'
 import { keyEvent } from '@/actions'
+import { t as tr } from '@/i18n'
 
 /** Terminals live outside React (one xterm per tab), attached to the visible container. */
 const terminals = new Map<string, { term: Terminal; fit: FitAddon; search: SearchAddon; el: HTMLDivElement; dispose: () => void }>()
+
+// at quit the workspace saves each shell's last lines (userData/scrollback)
+provideTerminalText((tabId) => {
+  const b = terminals.get(tabId)?.term.buffer.active
+  if (!b) return null
+  const lines: string[] = []
+  for (let i = 0; i < b.length; i++) lines.push(b.getLine(i)?.translateToString(true) ?? '')
+  return lastLines(lines, 1000) || null
+})
 if (import.meta.env.DEV || window.ct.debug) (window as any).__ct_termText = (tabId: string) => {
   const t = terminals.get(tabId)?.term; if (!t) return null
   const b = t.buffer.active; const lines: string[] = []
@@ -56,6 +67,12 @@ export function getOrCreate(tab: Tab, theme: ResolvedTheme, fontFamily: string, 
   term.open(el)
   try { term.loadAddon(new WebglAddon()) } catch { /* canvas renderer fallback */ }
   const unsubs: (() => void)[] = []
+  // a shell reopened from the last launch: its last lines first, greyed, above the new prompt
+  if (tab.replay) {
+    term.write('\x1b[90m' + tab.replay.replace(/\r?\n/g, '\r\n') + '\r\n── ' + tr('session restaurée') + ' ──\x1b[0m\r\n')
+    const tabId = tab.id
+    queueMicrotask(() => useWorkbench.setState((s) => ({ projects: s.projects.map((p) => ({ ...p, tabs: p.tabs.map((x) => (x.id === tabId ? { ...x, replay: undefined } : x)) })) })))
+  }
   if (tab.ptyId) {
     const id = tab.ptyId
     unsubs.push(window.ct.pty.onData(id, (d) => term.write(d)))

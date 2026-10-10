@@ -74,6 +74,12 @@ const api: CtApi = {
     load: (root) => ipcRenderer.invoke('links:load', root),
     save: (root, links) => ipcRenderer.invoke('links:save', { root, links }),
   },
+  workspace: {
+    load: () => ipcRenderer.invoke('workspace:load'),
+    save: (w, scrollbacks) => ipcRenderer.send('workspace:save', { w, scrollbacks }),
+    saveNow: (w, scrollbacks) => { ipcRenderer.sendSync('workspace:saveNow', { w, scrollbacks }) },
+    scrollback: (key) => ipcRenderer.invoke('workspace:scrollback', key),
+  },
   memo: {
     load: (root) => ipcRenderer.invoke('memo:load', root),
     list: () => ipcRenderer.invoke('memo:list'),

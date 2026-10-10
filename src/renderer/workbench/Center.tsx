@@ -93,7 +93,8 @@ export function Center({ project }: { project: Project }) {
               ...(window.ct.platform !== 'linux' ? ['sep' as const, { label: tr("Capture d'écran → prompt"), icon: Icons.camera(13), shortcut: shortcutLabel('app.screenshot'), onSelect: () => useWorkbench.getState().captureScreen(project.id) }] : []),
             ]}>{Icons.plus()}</MenuButton>
           </>}>
-          {current && current.kind === 'diff' ? <div className="term-wrap editor-bg"><DiffHost key={current.id} tab={current} /></div>
+          {current?.dormant ? <Waking key={current.id} tab={current} />
+          : current && current.kind === 'diff' ? <div className="term-wrap editor-bg"><DiffHost key={current.id} tab={current} /></div>
           : current && current.kind === 'file' ? (
             current.error ? <div className="term-wrap"><div className="empty">{current.error}</div></div>
             : current.fileKind === 'image' ? <div className="term-wrap"><ImageView src={current.imageUrl ?? ''} /></div>
@@ -135,4 +136,11 @@ export function Center({ project }: { project: Project }) {
       />
     </div>
   )
+}
+
+/** A tab reopened from the last launch, shown for the first time: its process (or file) starts now. */
+function Waking({ tab }: { tab: Tab }) {
+  useEffect(() => { useWorkbench.getState().wake(tab.id) }, [tab.id])
+  const what = tab.kind === 'file' ? tr('Ouverture…') : tab.kind === 'claude' && tab.dormant?.session ? tr('Reprise de la session…') : tr('Démarrage…')
+  return <div className="term-wrap"><div className="empty">{what}</div></div>
 }

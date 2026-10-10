@@ -15,6 +15,7 @@ import { FileService, DirWatcher } from './services/files'
 import { FileOps } from './services/file-ops'
 import { ProjectLinks } from './services/links'
 import { MemoStore } from './services/memo'
+import { WorkspaceStore } from './services/workspace'
 import { Skills } from './services/skills'
 import { Mcp } from './services/mcp'
 import { scanClaudeProcesses } from './services/process'
@@ -65,6 +66,7 @@ const send = (channel: string, payload: unknown) => { if (win && !win.isDestroye
 
 const links = new ProjectLinks(app.getPath('userData'))
 const memo = new MemoStore(app.getPath('userData'), (p) => shell.trashItem(p))
+const workspace = new WorkspaceStore(app.getPath('userData'))
 const ptys = new PtyService(() => settings.get(), (id, data) => send('pty:data', { id, data }), (id, code) => send('pty:exit', { id, code }), links)
 
 // pty
@@ -208,6 +210,10 @@ ipcMain.handle('hooks:set', (_e, on: boolean) => hooks.setInstalled(on))
 const ok = (fn: () => unknown) => { try { const r = fn(); return { ok: true, ...(typeof r === 'string' ? { path: r } : {}) } } catch (e) { return { ok: false, error: (e as Error).message } } }
 ipcMain.handle('links:load', (_e, root: string) => links.load(root))
 ipcMain.handle('links:save', (_e, { root, links: l }) => ok(() => links.save(root, l)))
+ipcMain.handle('workspace:load', () => workspace.load())
+ipcMain.on('workspace:save', (_e, { w, scrollbacks }) => { try { workspace.save(w, scrollbacks) } catch (e) { console.error('[workspace]', e) } })
+ipcMain.on('workspace:saveNow', (e, { w, scrollbacks }) => { try { workspace.save(w, scrollbacks) } catch (err) { console.error('[workspace]', err) } e.returnValue = true })
+ipcMain.handle('workspace:scrollback', (_e, key: string) => workspace.scrollback(key))
 ipcMain.handle('memo:load', (_e, root: string) => memo.load(root))
 ipcMain.handle('memo:list', () => memo.list())
 ipcMain.handle('memo:saveLinks', (_e, { root, links: l }) => ok(() => memo.saveLinks(root, l)))

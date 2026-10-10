@@ -4,6 +4,7 @@ import type { ToolEvent } from './claude-format'
 import { DEFAULT_REGISTRY, type Catalogue } from './plugin-registry'
 import type { UpdateState } from './update'
 import type { MemoLink, ProjectMemo } from './memo'
+import type { SavedWorkspace } from './workspace'
 import type { UsageSnapshot } from './usage'
 import type { ServiceStatus } from './claude-info'
 
@@ -288,6 +289,14 @@ export interface CtApi {
   links: {
     load(root: string): Promise<LinkedProject[]>
     save(root: string, links: LinkedProject[]): Promise<{ ok: boolean; error?: string }>
+  }
+  /** The tabs reopened at the next launch (userData/workspace.json, shells' last lines beside it) */
+  workspace: {
+    load(): Promise<SavedWorkspace>
+    save(w: SavedWorkspace, scrollbacks?: Record<string, string>): void
+    /** at quit (beforeunload): written before the window goes */
+    saveNow(w: SavedWorkspace, scrollbacks: Record<string, string>): void
+    scrollback(key: string): Promise<string>
   }
   /** The Mémo of each project (links, notes, pinned files), kept in the app's data */
   memo: {
