@@ -101,4 +101,20 @@ describe('ClaudeData', () => {
     expect(await data.subagent(main, '../../x')).toBeNull()
     t.dispose()
   })
+
+  it('deletes only a transcript of ~/.claude/projects, named after its session', async () => {
+    const { t, dir, data } = home()
+    const p = t.write(join(dir, 's1.jsonl'), jsonl([{ type: 'user', message: { content: 'x' } }]))
+    const other = t.write('notes/keep.jsonl', '{}')
+    const trashed: string[] = []
+    const trash = async (x: string) => { trashed.push(x) }
+    const base = { title: '', projectPath: '', modified: 0, messageCount: 0 } as any
+    await expect(data.deleteSession({ ...base, id: 'keep', path: other }, trash)).rejects.toThrow()
+    await expect(data.deleteSession({ ...base, id: 's2', path: p }, trash)).rejects.toThrow()
+    await expect(data.deleteSession({ ...base, id: '../x', path: p }, trash)).rejects.toThrow()
+    expect(trashed).toEqual([])
+    await data.deleteSession({ ...base, id: 's1', path: p }, trash)
+    expect(trashed).toEqual([p])
+    t.dispose()
+  })
 })

@@ -195,7 +195,15 @@ export class ClaudeData {
   }
 
   /** Moves a transcript (and its companion folder) to the trash and drops it from sessions-index.json. */
+  /** A session the renderer names: a transcript right under a project folder of ~/.claude/projects, named after its id. */
+  private isSession(s: SessionInfo): boolean {
+    return !!s && typeof s.id === 'string' && /^[\w-]+$/.test(s.id) && this.readable(s.path)
+      && basename(s.path) === `${s.id}.jsonl` && dirname(dirname(s.path)) === this.root
+  }
+
   async deleteSession(s: SessionInfo, trash: (p: string) => Promise<void>) {
+    // nothing else is trashed, nor any other sessions-index.json written
+    if (!this.isSession(s)) throw new Error('session introuvable')
     const dir = dirname(s.path)
     await trash(s.path)
     const companion = join(dir, s.id)
