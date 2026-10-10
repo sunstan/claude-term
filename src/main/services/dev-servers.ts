@@ -15,18 +15,23 @@ async function listening(): Promise<ListeningSocket[]> {
   return ss.length ? ss : lsof()
 }
 
-/** a port answers HTML (a page, not an API or a websocket): kept a minute per process and port */
-const html = new Map<string, { at: number; ok: boolean }>()
-async function servesHtml(key: string, url: string): Promise<boolean> {
-  const known = html.get(key)
-  if (known && Date.now() - known.at < 60_000) return known.ok
+/**
+ * A port answers HTML (a page, not an API, a debugger or a database): asked once per process and port, when it shows
+ * up, and remembered while it listens (a request every minute would fill the server's log).
+ */
+const html = new Map<string, Promise<boolean>>()
+function servesHtml(key: string, url: string): Promise<boolean> {
+  let known = html.get(key)
+  if (!known) { known = probe(url); html.set(key, known) }
+  return known
+}
+async function probe(url: string): Promise<boolean> {
   let ok = false
   try {
     const r = await fetch(url, { signal: AbortSignal.timeout(2000), headers: { Accept: 'text/html' } })
     ok = (r.headers.get('content-type') ?? '').includes('text/html')
     await r.body?.cancel()
   } catch { /* closed, or not HTTP */ }
-  html.set(key, { at: Date.now(), ok })
   return ok
 }
 
@@ -35,6 +40,9 @@ export async function devServers(ptyPids: Map<number, string>): Promise<DevServe
   if (!ptyPids.size) return []
   const [sockets, rows] = await Promise.all([listening(), processRows()])
   const found = discoverServers(sockets, rows, ptyPids)
+  // forget the servers gone: a new process on the same port is asked again
+  const live = new Set(found.map((s) => `${s.pid}:${s.port}`))
+  for (const k of html.keys()) if (!live.has(k)) html.delete(k)
   const ok = await Promise.all(found.map((s) => servesHtml(`${s.pid}:${s.port}`, s.probe)))
   return found.filter((_, i) => ok[i]).map(({ probe: _p, ...s }) => s)
 }
