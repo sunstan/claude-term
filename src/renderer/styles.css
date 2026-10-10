@@ -484,9 +484,9 @@ input[type=checkbox]:disabled { opacity: .4; }
 .lrow .acts.always { display: inline-flex; }
 .activity button.update { color: var(--ct-accent); }
 
-/* drag and drop reordering (useReorder): the others make room live, the dragged item shows where it will land */
+/* drag and drop reordering (useReorder): the others make room live, the dragged item's slot shows empty */
 .tab, .ptab { position: relative; }
-.tab.dragging, .ptab.dragging, .memo-row.dragging { opacity: .45; }
+.tab.dragging, .ptab.dragging, .memo-row.dragging { visibility: hidden; }
 
 /* Claude panel (right): blocks like the settings (.sgroup), rows inside */
 .claude-panel { overflow: auto; height: 100%; padding: 10px 10px 4px; }

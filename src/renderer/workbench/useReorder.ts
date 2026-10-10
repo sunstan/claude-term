@@ -13,7 +13,8 @@ export function useReorder(kind: string, onMove: (from: string, to: string, plac
   const type = 'application/x-claudeterm-' + kind
   /** the item dragged, and the order shown meanwhile once it moved */
   // done: dropped, the order shown until the items' saved order (async for some lists) is the same
-  const [drag, setDragState] = useState<{ id: string; order: string[] | null; done?: boolean } | null>(null)
+  // lifted: the item's own slot is left empty (only the drag image shows it), from the frame after the drag started
+  const [drag, setDragState] = useState<{ id: string; order: string[] | null; done?: boolean; lifted?: boolean } | null>(null)
   const done = useRef(false)
   done.current = !!drag?.done
   const els = useRef(new Map<string, HTMLElement>())
@@ -79,7 +80,12 @@ export function useReorder(kind: string, onMove: (from: string, to: string, plac
   const props = (id: string) => ({
     ref: (el: HTMLElement | null) => { if (el) els.current.set(id, el); else els.current.delete(id) },
     draggable: true,
-    onDragStart: (e: DragEvent<HTMLElement>) => { e.dataTransfer.setData(type, id); e.dataTransfer.effectAllowed = 'move'; setDrag({ id, order: null }) },
+    onDragStart: (e: DragEvent<HTMLElement>) => {
+      e.dataTransfer.setData(type, id); e.dataTransfer.effectAllowed = 'move'
+      setDrag({ id, order: null })
+      // not at once: the browser takes the drag image from the item once this handler returns
+      setTimeout(() => setDragState((d) => (d?.id === id && !d.done ? { ...d, lifted: true } : d)))
+    },
     onDragOver: (e: DragEvent<HTMLElement>) => {
       if (!accepts(e)) return
       e.preventDefault(); e.dataTransfer.dropEffect = 'move'
@@ -90,7 +96,7 @@ export function useReorder(kind: string, onMove: (from: string, to: string, plac
       if (from < 0 || to < 0) return
       // past the middle of the item, in the direction the pointer goes
       const side = half(e)
-      if ((to > from && side === 'after') || (to < from && side === 'before')) setDrag({ id: d.id, order: reorder(order, (x) => x, d.id, id, side) })
+      if ((to > from && side === 'after') || (to < from && side === 'before')) setDrag({ ...d, order: reorder(order, (x) => x, d.id, id, side) })
     },
     onDrop: (e: DragEvent<HTMLElement>) => { if (accepts(e)) { e.preventDefault(); e.stopPropagation(); commit() } },
     // after a drop the order shown stays (done); a drag ending anywhere else puts the items back
@@ -101,7 +107,7 @@ export function useReorder(kind: string, onMove: (from: string, to: string, plac
     onDragOver: (e: DragEvent<HTMLElement>) => { if (accepts(e)) { e.preventDefault(); e.dataTransfer.dropEffect = 'move' } },
     onDrop: (e: DragEvent<HTMLElement>) => { if (accepts(e)) { e.preventDefault(); commit() } },
   }
-  /** ' dragging' on the item being dragged, once it moved: it shows where it will land. */
-  const dropClass = (id: string) => (drag?.id === id && drag.order ? ' dragging' : '')
+  /** ' dragging' on the item being dragged: its slot, where it will land, shows empty. */
+  const dropClass = (id: string) => (drag?.id === id && drag.lifted && !drag.done ? ' dragging' : '')
   return { props, zone, arrange, dropClass }
 }
