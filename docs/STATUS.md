@@ -134,7 +134,7 @@ Handoff for the next session. Design: `docs/DESIGN.md`. Working rules: `CLAUDE.m
 
 0. **Next task: Linear plugin**, first catalogue plugin, in its own repo: needs the `fetch` (network permission,
    domain-scoped) and `secrets` (safeStorage) APIs in the host first. Then add it to `sunstan/claudeterm-plugins`
-   `registry.json` with the plugin's release .tgz + sha256 (repo created 2026-09-27, empty registry, local clone in `../claudeterm-plugins`).
+   `registry.json` with the plugin's release .tgz + sha256 (repo created 2026-09-27, empty registry, local clone in `../plugins`).
 1. **Bug to reproduce**: the user sees the right icon column change size "when a tab is selected"; not reproduced
    (measured 38 px in every state). Waiting for before/after screenshots.
 3. Plugins: Thèmes plugin (list, preview, VS Code import); `network` (domain-scoped, through the plugin session) and

@@ -1,7 +1,7 @@
 # ClaudeTerm v2 — notes for Claude Code
 
 Electron workbench for Claude Code (macOS, Windows, Linux). Successor of the native Swift v1 in
-`../claude-term`; the design is in `docs/DESIGN.md` (read it before structural changes).
+branch `v1` / tag `v1-swift`; the design is in `docs/DESIGN.md` (read it before structural changes).
 
 - Run: `npm run dev` (electron-vite --watch: HMR for the renderer, main/preload rebuilt and Electron restarted on change). Build: `npm run build`.
   Dev name/icon on macOS: `npm run dev:bundle` (also run by postinstall) renames node_modules' Electron.app to ClaudeTerm.

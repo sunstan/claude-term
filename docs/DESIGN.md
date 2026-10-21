@@ -2,7 +2,7 @@
 
 Cross-platform workbench for Claude Code (macOS, Windows, Linux). Electron, architecture
 borrowed from VS Code (contribution points, isolated extension host, theme format), code of
-our own. Successor of the native Swift v1 (`../claude-term`), whose knowledge of Claude Code's
+our own. Successor of the native Swift v1 (branch `v1`, tag `v1-swift`), whose knowledge of Claude Code's
 files carries over. test
 
 ## 1. Goals
