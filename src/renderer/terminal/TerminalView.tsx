@@ -15,7 +15,8 @@ import { keyEvent, pluginCommandFor } from '@/actions'
 import { t as tr } from '@/i18n'
 
 /** Terminals live outside React (one xterm per tab), attached to the visible container. */
-const terminals = new Map<string, { term: Terminal; fit: FitAddon; search: SearchAddon; el: HTMLDivElement; dispose: () => void }>()
+type Entry = { term: Terminal; fit: FitAddon; search: SearchAddon; el: HTMLDivElement; webgl?: WebglAddon; dispose: () => void }
+const terminals = new Map<string, Entry>()
 
 // at quit the workspace saves each shell's last lines (userData/scrollback)
 provideTerminalText((tabId) => {
@@ -71,7 +72,6 @@ export function getOrCreate(tab: Tab, theme: ResolvedTheme, fontFamily: string, 
   const el = document.createElement('div')
   el.className = 'term'
   term.open(el)
-  try { term.loadAddon(new WebglAddon()) } catch { /* canvas renderer fallback */ }
   const unsubs: (() => void)[] = []
   // a shell reopened from the last launch: its last lines first, greyed, above the new prompt
   if (tab.replay) {
@@ -152,9 +152,26 @@ export function getOrCreate(tab: Tab, theme: ResolvedTheme, fontFamily: string, 
     // Claude Code's title: a spinner while it works, ✳ at rest
     term.onTitleChange((title) => useWorkbench.getState().claudeTitle(tab.id, title))
   }
-  t = { term, fit, search, el, dispose: () => { unsubs.forEach((u) => u()); term.dispose(); terminals.delete(tab.id) } }
+  const entry: Entry = { term, fit, search, el, dispose: () => { unsubs.forEach((u) => u()); detachWebgl(entry); term.dispose(); terminals.delete(tab.id) } }
+  t = entry
   terminals.set(tab.id, t)
   return t
+}
+
+/** WebGL only for the visible terminal: one context per xterm exhausted Chromium's limit (~16) and GPU memory
+ *  with many tabs, until the renderer crashed. Hidden terminals use xterm's DOM renderer. */
+function attachWebgl(t: Entry) {
+  if (t.webgl) return
+  try {
+    const gl = new WebglAddon()
+    gl.onContextLoss(() => detachWebgl(t))   // falls back to the DOM renderer instead of a blank terminal
+    t.term.loadAddon(gl)
+    t.webgl = gl
+  } catch { /* DOM renderer fallback */ }
+}
+function detachWebgl(t: Entry) {
+  const gl = t.webgl; t.webgl = undefined
+  try { gl?.dispose() } catch { /* context already gone */ }
 }
 
 export function disposeTerminal(tabId: string) { terminals.get(tabId)?.dispose() }
@@ -170,10 +187,11 @@ export function TerminalHost({ tab }: { tab: Tab }) {
     const host = ref.current!
     const t = getOrCreate(tab, theme, settings.fontFamily, settings.fontSize)
     host.appendChild(t.el)
+    attachWebgl(t)
     const ro = new ResizeObserver(() => { try { t.fit.fit() } catch { /* not laid out yet */ } })
     ro.observe(host)
     requestAnimationFrame(() => { try { t.fit.fit() } catch {} ; t.term.focus() })
-    return () => { ro.disconnect(); if (t.el.parentElement === host) host.removeChild(t.el) }
+    return () => { ro.disconnect(); detachWebgl(t); if (t.el.parentElement === host) host.removeChild(t.el) }
   }, [tab.id])
 
   useEffect(() => {

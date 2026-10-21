@@ -6,7 +6,7 @@ import { readdirSync, statSync, existsSync, readFileSync, watch } from 'node:fs'
 import { SettingsService } from './services/settings'
 import { ThemeService } from './services/themes'
 import { PtyService } from './services/pty'
-import { createWindow, applyOverlayTheme } from './window'
+import { createWindow, applyOverlayTheme, watchChildCrashes } from './window'
 import { ClaudeData } from './services/claude-data'
 import { SessionTracker } from './services/session-tracker'
 import { ClaudeSettings } from './services/claude-settings'
@@ -494,6 +494,7 @@ app.whenReady().then(() => {
   // Windows / Linux have no menu bar, so no default menu either: its accelerators act whenever the page leaves a key
   // alone (Ctrl+R reloads the workbench, Ctrl+W closes the window and quits). macOS keeps it for its menu bar.
   if (process.platform !== 'darwin') Menu.setApplicationMenu(null)
+  watchChildCrashes()
   win = createWindow(themes.current())
   // plugin windows are hidden BrowserWindows too: closing the workbench window quits
   win.webContents.once('did-finish-load', () => { pluginStore.cleanStaging(); pluginHost.loadAll(); updater.start() })
